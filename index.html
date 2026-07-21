@@ -501,6 +501,32 @@
         .bodega-active-chips .bchip:hover { background: var(--red); }
         .bodega-active-chips .bchip .bchip-x { font-size: 0.65rem; }
         .bodega-active-chips .bchip-remove-all { background: var(--red-bg); color: var(--red); }
+
+        .multi-filter-bar .ms-wrap { position: relative; display: inline-block; }
+        .multi-filter-bar .ms-trigger { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem; color: var(--text-primary); transition: border-color 0.15s; }
+        .multi-filter-bar .ms-trigger:hover { border-color: var(--accent); }
+        .multi-filter-bar .ms-trigger .ms-label { color: var(--text-muted); font-size: 0.72rem; }
+        .multi-filter-bar .ms-trigger .ms-count { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .multi-filter-bar .ms-trigger .ms-arrow { font-size: 0.5rem; opacity: 0.6; }
+        .ms-panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 100; min-width: 220px; max-height: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.25); display: none; flex-direction: column; }
+        .ms-panel.open { display: flex; }
+        .ms-panel .ms-header { padding: 10px 12px 6px; border-bottom: 1px solid var(--border); }
+        .ms-panel .ms-header .ms-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.3px; margin-bottom: 6px; }
+        .ms-panel .ms-header input { width: 100%; padding: 5px 8px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: var(--radius-sm); font-size: 0.78rem; }
+        .ms-panel .ms-header input:focus { outline: none; border-color: var(--accent); }
+        .ms-panel .ms-actions { display: flex; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--border); }
+        .ms-panel .ms-actions button { flex: 1; padding: 4px 0; font-size: 0.7rem; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; }
+        .ms-panel .ms-actions .ms-sel-all { background: var(--accent-dark); color: white; border-color: var(--accent-dark); }
+        .ms-panel .ms-actions .ms-sel-all:hover { background: var(--accent); }
+        .ms-panel .ms-actions .ms-clear { background: var(--bg-card); color: var(--text-secondary); }
+        .ms-panel .ms-actions .ms-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+        .ms-panel .ms-list { overflow-y: auto; flex: 1; padding: 4px 0; max-height: 180px; }
+        .ms-panel .ms-footer { padding: 6px 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .ms-panel .ms-footer .ms-count-text { font-size: 0.7rem; color: var(--text-muted); }
+        .ms-panel .ms-footer .ms-apply { padding: 4px 12px; background: var(--accent-dark); color: white; border: none; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+        .ms-panel .ms-footer .ms-apply:hover { background: var(--accent); }
+        .ms-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+        .multi-filter-bar select { display: none; }
         .alerts-section { margin: 16px 0; }
         .alert-row { display: flex; gap: 12px; flex-wrap: wrap; }
         .alert-badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 500; border: 1px solid; }
@@ -525,7 +551,9 @@
             .toolbar { flex-direction: column; }
             .search-box { min-width: 100%; }
             .detail-grid { grid-template-columns: 1fr; }
-            .multi-filter-bar { flex-direction: column; }
+            .multi-filter-bar { flex-direction: column; align-items: flex-start; }
+            .multi-filter-bar .ms-wrap { width: 100%; }
+            .multi-filter-bar .ms-trigger { width: 100%; justify-content: space-between; }
         }
     </style>
 </head>
@@ -583,19 +611,90 @@
                 <div id="pivotFiltersWrap">
                     <div class="multi-filter-bar" id="multiFilterBar">
                         <span class="mf-label">Filtros:</span>
-                        <select id="filterCanal" onchange="applyMultiFilter()">
-                            <option value="">Todos los canales</option>
-                        </select>
-                        <select id="filterCategoria" onchange="applyMultiFilter()">
-                            <option value="">Todas las categorias</option>
-                        </select>
-                        <select id="filterEstado" onchange="applyMultiFilter()">
-                            <option value="">Todos los estados</option>
-                        </select>
-                        <select id="filterLinea" onchange="applyMultiFilter()">
-                            <option value="">Todas las lineas</option>
-                        </select>
-                        <div class="active-filters" id="activeFilters"></div>
+                        <div class="ms-wrap" id="msCanalWrap">
+                            <div class="ms-trigger" onclick="toggleMsSelect('canal')">
+                                <span class="ms-label">Canal</span>
+                                <span class="ms-count" id="msCanalCount">Todos</span>
+                                <span class="ms-arrow">&#9660;</span>
+                            </div>
+                            <div class="ms-panel" id="msCanalPanel">
+                                <div class="ms-header"><div class="ms-title">Seleccionar canales</div>
+                                    <input type="text" placeholder="Buscar canal..." oninput="filterMsList('canal', this.value)">
+                                </div>
+                                <div class="ms-actions">
+                                    <button class="ms-sel-all" onclick="toggleAllMs('canal', true)">Seleccionar todas</button>
+                                    <button class="ms-clear" onclick="toggleAllMs('canal', false)">Limpiar</button>
+                                </div>
+                                <div class="ms-list" id="msCanalList"></div>
+                                <div class="ms-footer"><span class="ms-count-text" id="msCanalCountText">0 de 0</span>
+                                    <button class="ms-apply" onclick="applyMsSelect('canal')">Aplicar</button>
+                                </div>
+                            </div>
+                            <div class="ms-chips" id="msCanalChips"></div>
+                        </div>
+                        <div class="ms-wrap" id="msCategoriaWrap">
+                            <div class="ms-trigger" onclick="toggleMsSelect('categoria')">
+                                <span class="ms-label">Categoria</span>
+                                <span class="ms-count" id="msCategoriaCount">Todas</span>
+                                <span class="ms-arrow">&#9660;</span>
+                            </div>
+                            <div class="ms-panel" id="msCategoriaPanel">
+                                <div class="ms-header"><div class="ms-title">Seleccionar categorias</div>
+                                    <input type="text" placeholder="Buscar categoria..." oninput="filterMsList('categoria', this.value)">
+                                </div>
+                                <div class="ms-actions">
+                                    <button class="ms-sel-all" onclick="toggleAllMs('categoria', true)">Seleccionar todas</button>
+                                    <button class="ms-clear" onclick="toggleAllMs('categoria', false)">Limpiar</button>
+                                </div>
+                                <div class="ms-list" id="msCategoriaList"></div>
+                                <div class="ms-footer"><span class="ms-count-text" id="msCategoriaCountText">0 de 0</span>
+                                    <button class="ms-apply" onclick="applyMsSelect('categoria')">Aplicar</button>
+                                </div>
+                            </div>
+                            <div class="ms-chips" id="msCategoriaChips"></div>
+                        </div>
+                        <div class="ms-wrap" id="msEstadoWrap">
+                            <div class="ms-trigger" onclick="toggleMsSelect('estado')">
+                                <span class="ms-label">Estado</span>
+                                <span class="ms-count" id="msEstadoCount">Todos</span>
+                                <span class="ms-arrow">&#9660;</span>
+                            </div>
+                            <div class="ms-panel" id="msEstadoPanel">
+                                <div class="ms-header"><div class="ms-title">Seleccionar estados</div>
+                                    <input type="text" placeholder="Buscar estado..." oninput="filterMsList('estado', this.value)">
+                                </div>
+                                <div class="ms-actions">
+                                    <button class="ms-sel-all" onclick="toggleAllMs('estado', true)">Seleccionar todos</button>
+                                    <button class="ms-clear" onclick="toggleAllMs('estado', false)">Limpiar</button>
+                                </div>
+                                <div class="ms-list" id="msEstadoList"></div>
+                                <div class="ms-footer"><span class="ms-count-text" id="msEstadoCountText">0 de 0</span>
+                                    <button class="ms-apply" onclick="applyMsSelect('estado')">Aplicar</button>
+                                </div>
+                            </div>
+                            <div class="ms-chips" id="msEstadoChips"></div>
+                        </div>
+                        <div class="ms-wrap" id="msLineaWrap">
+                            <div class="ms-trigger" onclick="toggleMsSelect('linea')">
+                                <span class="ms-label">Linea</span>
+                                <span class="ms-count" id="msLineaCount">Todas</span>
+                                <span class="ms-arrow">&#9660;</span>
+                            </div>
+                            <div class="ms-panel" id="msLineaPanel">
+                                <div class="ms-header"><div class="ms-title">Seleccionar lineas</div>
+                                    <input type="text" placeholder="Buscar linea..." oninput="filterMsList('linea', this.value)">
+                                </div>
+                                <div class="ms-actions">
+                                    <button class="ms-sel-all" onclick="toggleAllMs('linea', true)">Seleccionar todas</button>
+                                    <button class="ms-clear" onclick="toggleAllMs('linea', false)">Limpiar</button>
+                                </div>
+                                <div class="ms-list" id="msLineaList"></div>
+                                <div class="ms-footer"><span class="ms-count-text" id="msLineaCountText">0 de 0</span>
+                                    <button class="ms-apply" onclick="applyMsSelect('linea')">Aplicar</button>
+                                </div>
+                            </div>
+                            <div class="ms-chips" id="msLineaChips"></div>
+                        </div>
                     </div>
                 </div>
                 <div id="bodegaMsWrap" style="position:relative; display:inline-block;">
@@ -705,9 +804,10 @@
         let detailSortStates = {};
         let detailSearchQueries = {};
         let expandedDetailSections = {};
-        let activeFilters = { canal: '', categoria: '', estado: '', linea: '' };
+        let activeFilters = { canal: new Set(), categoria: new Set(), estado: new Set(), linea: new Set() };
         let selectedBodegas = new Set();
         let bodegaMsOpen = false;
+        let msOpenKey = null;
 
         const uploadZone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
@@ -866,10 +966,10 @@
             const wrap = document.getElementById('pivotWrap');
             let metrics = appData.bodega_metrics || [];
             if (selectedBodegas.size > 0) { metrics = metrics.filter(m => selectedBodegas.has(m.bodega)); }
-            if (activeFilters.canal) { metrics = metrics.filter(m => m.por_canal && m.por_canal[activeFilters.canal]); }
-            if (activeFilters.categoria) { metrics = metrics.filter(m => m.por_categoria && m.por_categoria[activeFilters.categoria]); }
-            if (activeFilters.estado) { metrics = metrics.filter(m => m.por_estado && m.por_estado[activeFilters.estado]); }
-            if (activeFilters.linea) { metrics = metrics.filter(m => m.por_linea && m.por_linea[activeFilters.linea]); }
+            if (activeFilters.canal.size > 0) { metrics = metrics.filter(m => m.por_canal && [...activeFilters.canal].some(f => m.por_canal[f])); }
+            if (activeFilters.categoria.size > 0) { metrics = metrics.filter(m => m.por_categoria && [...activeFilters.categoria].some(f => m.por_categoria[f])); }
+            if (activeFilters.estado.size > 0) { metrics = metrics.filter(m => m.por_estado && [...activeFilters.estado].some(f => m.por_estado[f])); }
+            if (activeFilters.linea.size > 0) { metrics = metrics.filter(m => m.por_linea && [...activeFilters.linea].some(f => m.por_linea[f])); }
             const filtered = metrics;
 
             const headers = ['Bodega', 'Comprometida', 'Existencia', 'Disponible'];
@@ -895,7 +995,7 @@
 
             pivotDataRows = dataRows;
 
-            if (selectedBodegas.size > 0 || Object.values(activeFilters).some(v => v)) {
+            if (selectedBodegas.size > 0 || Object.values(activeFilters).some(s => s.size > 0)) {
                 const badgeText = filtered.length < (appData.bodega_metrics || []).length
                     ? `${filtered.length} bodegas`
                     : (pivot.filter_value || 'Todas');
@@ -1112,10 +1212,10 @@
             const sortVal = document.getElementById('sortSelect').value;
             let metrics = [...appData.bodega_metrics];
             if (query) { metrics = metrics.filter(m => m.bodega.toLowerCase().includes(query)); }
-            if (activeFilters.canal) { metrics = metrics.filter(m => m.por_canal && m.por_canal[activeFilters.canal]); }
-            if (activeFilters.categoria) { metrics = metrics.filter(m => m.por_categoria && m.por_categoria[activeFilters.categoria]); }
-            if (activeFilters.estado) { metrics = metrics.filter(m => m.por_estado && m.por_estado[activeFilters.estado]); }
-            if (activeFilters.linea) { metrics = metrics.filter(m => m.por_linea && m.por_linea[activeFilters.linea]); }
+            if (activeFilters.canal.size > 0) { metrics = metrics.filter(m => m.por_canal && [...activeFilters.canal].some(f => m.por_canal[f])); }
+            if (activeFilters.categoria.size > 0) { metrics = metrics.filter(m => m.por_categoria && [...activeFilters.categoria].some(f => m.por_categoria[f])); }
+            if (activeFilters.estado.size > 0) { metrics = metrics.filter(m => m.por_estado && [...activeFilters.estado].some(f => m.por_estado[f])); }
+            if (activeFilters.linea.size > 0) { metrics = metrics.filter(m => m.por_linea && [...activeFilters.linea].some(f => m.por_linea[f])); }
             const [sortKey, sortDir] = sortVal.split('-');
             metrics.sort((a, b) => {
                 let va, vb;
@@ -1364,7 +1464,7 @@
             expandedDetailSections = {};
             detailSearchQueries = {};
             detailSortStates = {};
-            activeFilters = { canal: '', categoria: '', estado: '', linea: '' };
+            activeFilters = { canal: new Set(), categoria: new Set(), estado: new Set(), linea: new Set() };
             pivotSortState = { col: -1, asc: false };
             selectedBodegas.clear();
             bodegaMsOpen = false;
@@ -1380,62 +1480,145 @@
         function populateFilters() {
             if (!appData || !appData.global_summary) return;
             const gs = appData.global_summary;
-            const canalSel = document.getElementById('filterCanal');
-            const catSel = document.getElementById('filterCategoria');
-            const estadoSel = document.getElementById('filterEstado');
-            const lineaSel = document.getElementById('filterLinea');
+            const mapping = { canal: gs.canal_total, categoria: gs.categoria_total, estado: gs.estado_total, linea: gs.linea_total };
+            const defaults = { canal: 'Todos', categoria: 'Todas', estado: 'Todos', linea: 'Todas' };
             let hasFilters = false;
-            if (Object.keys(gs.canal_total || {}).length > 1) {
-                canalSel.innerHTML = '<option value="">Todos los canales</option>' +
-                    Object.keys(gs.canal_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
-                hasFilters = true;
-            } else { canalSel.parentElement.style.display = 'none'; }
-            if (Object.keys(gs.categoria_total || {}).length > 1) {
-                catSel.innerHTML = '<option value="">Todas las categorias</option>' +
-                    Object.keys(gs.categoria_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
-                hasFilters = true;
-            } else { catSel.parentElement.style.display = 'none'; }
-            if (Object.keys(gs.estado_total || {}).length > 1) {
-                estadoSel.innerHTML = '<option value="">Todos los estados</option>' +
-                    Object.keys(gs.estado_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
-                hasFilters = true;
-            } else { estadoSel.parentElement.style.display = 'none'; }
-            if (Object.keys(gs.linea_total || {}).length > 1) {
-                lineaSel.innerHTML = '<option value="">Todas las lineas</option>' +
-                    Object.keys(gs.linea_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
-                hasFilters = true;
-            } else { lineaSel.parentElement.style.display = 'none'; }
+            for (const [key, data] of Object.entries(mapping)) {
+                const items = Object.keys(data || {}).sort();
+                if (items.length > 1) { hasFilters = true; }
+                const list = document.getElementById('ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'List');
+                const wrap = document.getElementById('ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'Wrap');
+                if (wrap) wrap.style.display = items.length > 1 ? '' : 'none';
+                if (!list) continue;
+                list.innerHTML = items.map(item => {
+                    return `<label class="bm-option" data-name="${escHtml(item)}">
+                        <input type="checkbox" onchange="toggleMsItem('${key}', '${escHtml(item).replace(/'/g, "\\'")}')">
+                        <span>${escHtml(item)}</span>
+                    </label>`;
+                }).join('');
+                activeFilters[key] = new Set();
+                updateMsLabel(key, defaults[key]);
+            }
             document.getElementById('pivotFiltersWrap').style.display = hasFilters ? 'block' : 'none';
         }
 
-        function applyMultiFilter() {
-            activeFilters.canal = document.getElementById('filterCanal').value;
-            activeFilters.categoria = document.getElementById('filterCategoria').value;
-            activeFilters.estado = document.getElementById('filterEstado').value;
-            activeFilters.linea = document.getElementById('filterLinea').value;
-            renderActiveFilterChips();
+        function toggleMsSelect(key) {
+            const panelId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'Panel';
+            const panel = document.getElementById(panelId);
+            if (msOpenKey === key) { panel.classList.remove('open'); msOpenKey = null; return; }
+            if (msOpenKey) { document.getElementById('ms' + msOpenKey.charAt(0).toUpperCase() + msOpenKey.slice(1) + 'Panel').classList.remove('open'); }
+            msOpenKey = key;
+            panel.classList.add('open');
+            const searchInput = panel.querySelector('.ms-header input');
+            if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+        }
+
+        function filterMsList(key, q) {
+            const query = q.toLowerCase().trim();
+            const listId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'List';
+            document.querySelectorAll(`#${listId} .bm-option`).forEach(el => {
+                el.style.display = (el.dataset.name || '').toLowerCase().includes(query) ? '' : 'none';
+            });
+        }
+
+        function toggleAllMs(key, selectAll) {
+            const set = activeFilters[key];
+            if (selectAll) {
+                const gs = appData.global_summary;
+                const data = gs[key + '_total'] || {};
+                Object.keys(data).forEach(k => set.add(k));
+            } else { set.clear(); }
+            syncMsCheckboxes(key);
+            updateMsLabel(key);
+            renderMsChips(key);
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+            if (!selectAll) { closeAllMsPanels(); }
+        }
+
+        function toggleMsItem(key, name) {
+            const set = activeFilters[key];
+            if (set.has(name)) set.delete(name); else set.add(name);
+            updateMsLabel(key);
+            renderMsChips(key);
             expandedPivotRows = {};
             renderPivotTable();
             filterBodegas();
         }
 
-        function removeFilter(key) {
-            activeFilters[key] = '';
-            document.getElementById('filter' + key.charAt(0).toUpperCase() + key.slice(1)).value = '';
-            renderActiveFilterChips();
+        function applyMsSelect(key) { closeAllMsPanels(); }
+
+        function closeAllMsPanels() {
+            document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+            msOpenKey = null;
+        }
+
+        function syncMsCheckboxes(key) {
+            const set = activeFilters[key];
+            const listId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'List';
+            document.querySelectorAll(`#${listId} .bm-option`).forEach(el => {
+                const checked = set.has(el.dataset.name);
+                el.querySelector('input').checked = checked;
+                el.classList.toggle('selected', checked);
+            });
+            const countId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'CountText';
+            const countEl = document.getElementById(countId);
+            if (countEl) {
+                const total = document.querySelectorAll(`#${listId} .bm-option`).length;
+                countEl.textContent = `${set.size} de ${total}`;
+            }
+        }
+
+        function updateMsLabel(key, defaultText) {
+            const countId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'Count';
+            const el = document.getElementById(countId);
+            if (!el) return;
+            const set = activeFilters[key];
+            if (set.size === 0) { el.textContent = defaultText || 'Todos'; }
+            else if (set.size === 1) { el.textContent = [...set][0]; }
+            else { el.textContent = `${set.size} seleccionados`; }
+        }
+
+        function renderMsChips(key) {
+            const containerId = 'ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'Chips';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const set = activeFilters[key];
+            if (set.size === 0) { container.innerHTML = ''; return; }
+            const items = [...set];
+            let html = items.slice(0, 3).map(n => `<span class="bchip" onclick="removeMsItem('${key}', '${escHtml(n).replace(/'/g, "\\'")}')">${escHtml(n)} <span class="bchip-x">&times;</span></span>`).join('');
+            if (items.length > 3) html += `<span class="bchip bchip-remove-all">+${items.length - 3} mas</span>`;
+            html += `<span class="bchip bchip-remove-all" onclick="clearAllMs('${key}')">Quitar &times;</span>`;
+            container.innerHTML = html;
+        }
+
+        function removeMsItem(key, name) {
+            activeFilters[key].delete(name);
+            syncMsCheckboxes(key);
+            updateMsLabel(key);
+            renderMsChips(key);
             expandedPivotRows = {};
             renderPivotTable();
             filterBodegas();
         }
 
-        function renderActiveFilterChips() {
-            const container = document.getElementById('activeFilters');
-            const labels = { canal: 'Canal', categoria: 'Categoria', estado: 'Estado', linea: 'Linea' };
-            container.innerHTML = Object.entries(activeFilters)
-                .filter(([, v]) => v)
-                .map(([k, v]) => `<span class="filter-chip" onclick="removeFilter('${k}')">${labels[k]}: ${escHtml(v)} <span class="chip-x">&times;</span></span>`)
-                .join('');
+        function clearAllMs(key) {
+            activeFilters[key].clear();
+            syncMsCheckboxes(key);
+            updateMsLabel(key);
+            renderMsChips(key);
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
         }
+
+        document.addEventListener('click', (e) => {
+            if (msOpenKey) {
+                const wrap = document.getElementById('ms' + msOpenKey.charAt(0).toUpperCase() + msOpenKey.slice(1) + 'Wrap');
+                if (wrap && !wrap.contains(e.target)) { closeAllMsPanels(); }
+            }
+        });
 
         function toggleBodegaMultiSelect() {
             bodegaMsOpen = !bodegaMsOpen;
