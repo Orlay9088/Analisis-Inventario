@@ -879,6 +879,15 @@
                 m.existencia,
                 m.cant_disponible
             ]);
+            if (pivotSortState.col >= 0) {
+                const sc = pivotSortState.col;
+                const sa = pivotSortState.asc;
+                dataRows.sort((a, b) => {
+                    const va = typeof a[sc] === 'number' ? a[sc] : 0;
+                    const vb = typeof b[sc] === 'number' ? b[sc] : 0;
+                    return sa ? va - vb : vb - va;
+                });
+            }
             const sumC = filtered.reduce((s, m) => s + m.cant_comprometida, 0);
             const sumE = filtered.reduce((s, m) => s + m.existencia, 0);
             const sumD = filtered.reduce((s, m) => s + m.cant_disponible, 0);
@@ -886,10 +895,11 @@
 
             pivotDataRows = dataRows;
 
-            if (selectedBodegas.size > 0) {
-                document.getElementById('pivotBadge').textContent = filtered.length === metrics.length
-                    ? (pivot.filter_value || 'Todas')
-                    : `${filtered.length} bodegas`;
+            if (selectedBodegas.size > 0 || Object.values(activeFilters).some(v => v)) {
+                const badgeText = filtered.length < (appData.bodega_metrics || []).length
+                    ? `${filtered.length} bodegas`
+                    : (pivot.filter_value || 'Todas');
+                document.getElementById('pivotBadge').textContent = badgeText;
             } else if (pivot.filter_value) {
                 document.getElementById('pivotBadge').textContent = pivot.filter_value;
             }
@@ -1067,11 +1077,6 @@
                 pivotSortState.col = colIdx;
                 pivotSortState.asc = false;
             }
-            pivotDataRows.sort((a, b) => {
-                const va = typeof a[colIdx] === 'number' ? a[colIdx] : 0;
-                const vb = typeof b[colIdx] === 'number' ? b[colIdx] : 0;
-                return pivotSortState.asc ? va - vb : vb - va;
-            });
             renderPivotTable();
         }
 
@@ -1081,7 +1086,7 @@
         }
 
         function toggleDetailSection(secKey) {
-            expandedDetailSections[secKey] = expandedDetailSections[secKey] === false;
+            expandedDetailSections[secKey] = !expandedDetailSections[secKey];
             renderPivotTable();
         }
 
@@ -1111,7 +1116,6 @@
             if (activeFilters.categoria) { metrics = metrics.filter(m => m.por_categoria && m.por_categoria[activeFilters.categoria]); }
             if (activeFilters.estado) { metrics = metrics.filter(m => m.por_estado && m.por_estado[activeFilters.estado]); }
             if (activeFilters.linea) { metrics = metrics.filter(m => m.por_linea && m.por_linea[activeFilters.linea]); }
-            if (selectedBodegas.size > 0) { metrics = metrics.filter(m => selectedBodegas.has(m.bodega)); }
             const [sortKey, sortDir] = sortVal.split('-');
             metrics.sort((a, b) => {
                 let va, vb;
