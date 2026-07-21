@@ -864,10 +864,13 @@
             document.getElementById('pivotSection').style.display = 'block';
 
             const wrap = document.getElementById('pivotWrap');
-            const metrics = appData.bodega_metrics || [];
-            const filtered = selectedBodegas.size > 0
-                ? metrics.filter(m => selectedBodegas.has(m.bodega))
-                : metrics;
+            let metrics = appData.bodega_metrics || [];
+            if (selectedBodegas.size > 0) { metrics = metrics.filter(m => selectedBodegas.has(m.bodega)); }
+            if (activeFilters.canal) { metrics = metrics.filter(m => m.por_canal && m.por_canal[activeFilters.canal]); }
+            if (activeFilters.categoria) { metrics = metrics.filter(m => m.por_categoria && m.por_categoria[activeFilters.categoria]); }
+            if (activeFilters.estado) { metrics = metrics.filter(m => m.por_estado && m.por_estado[activeFilters.estado]); }
+            if (activeFilters.linea) { metrics = metrics.filter(m => m.por_linea && m.por_linea[activeFilters.linea]); }
+            const filtered = metrics;
 
             const headers = ['Bodega', 'Comprometida', 'Existencia', 'Disponible'];
             const dataRows = filtered.map(m => [
@@ -1407,6 +1410,8 @@
             activeFilters.estado = document.getElementById('filterEstado').value;
             activeFilters.linea = document.getElementById('filterLinea').value;
             renderActiveFilterChips();
+            expandedPivotRows = {};
+            renderPivotTable();
             filterBodegas();
         }
 
@@ -1414,6 +1419,8 @@
             activeFilters[key] = '';
             document.getElementById('filter' + key.charAt(0).toUpperCase() + key.slice(1)).value = '';
             renderActiveFilterChips();
+            expandedPivotRows = {};
+            renderPivotTable();
             filterBodegas();
         }
 
