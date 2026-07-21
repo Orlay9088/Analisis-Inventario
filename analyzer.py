@@ -663,3 +663,35 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
         "total_filtered_rows": len(df_filtered),
         "detected_columns": {k: (headers[v] if v is not None else None) for k, v in col_map.items()},
     }
+
+
+DISPLAY_COLS = ["bodega", "desc_bodega", "referencia", "desc_item", "linea",
+                "sub_linea", "categoria", "canal", "estado", "proveedor",
+                "existencia", "cant_comprometida", "cant_disponible",
+                "valor_total", "precio_unitario", "lote", "ubicacion"]
+
+
+def search_inventory(query: str, df: pd.DataFrame, limit: int = 50) -> list[dict]:
+    if not query or not query.strip():
+        return []
+    q = query.strip().lower()
+    str_cols = [c for c in df.columns if df[c].dtype == object or c in DISPLAY_COLS]
+    mask = pd.Series(False, index=df.index)
+    for col in str_cols:
+        if col in df.columns:
+            mask |= df[col].astype(str).str.lower().str.contains(q, na=False)
+    matched = df[mask].head(limit)
+    results = []
+    for _, row in matched.iterrows():
+        item = {}
+        for col in DISPLAY_COLS:
+            if col in row.index:
+                val = row[col]
+                if pd.isna(val):
+                    item[col] = None
+                elif isinstance(val, (int, float)):
+                    item[col] = round(float(val), 2)
+                else:
+                    item[col] = str(val).strip()
+        results.append(item)
+    return results

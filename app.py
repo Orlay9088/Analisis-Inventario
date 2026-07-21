@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
-from analyzer import process_excel, build_bodega_prompt
+from analyzer import process_excel, build_bodega_prompt, search_inventory
 
 
 def to_serializable(obj):
@@ -367,6 +367,13 @@ async def upload_excel(file: UploadFile = File(...)):
         current_data["result"] = to_serializable(result)
         current_data["filename"] = file.filename
         current_data["filepath"] = str(filepath)
+
+        import pandas as pd
+        try:
+            raw_df = pd.read_excel(str(filepath), engine='openpyxl')
+            current_data["raw_df"] = raw_df
+        except Exception:
+            current_data["raw_df"] = None
     except ValueError as e:
         filepath.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(e))
@@ -389,6 +396,16 @@ async def get_data():
     if not current_data.get("result"):
         raise HTTPException(status_code=400, detail="No hay datos cargados. Sube un Excel primero.")
     return current_data["result"]
+
+
+@app.get("/search")
+async def search(q: str = Query(""), limit: int = Query(50)):
+    if not current_data.get("raw_df") is not None:
+        raise HTTPException(status_code=400, detail="No hay datos cargados. Sube un Excel primero.")
+    if not q or len(q.strip()) < 2:
+        return {"results": [], "query": q}
+    results = search_inventory(q, current_data["raw_df"], limit=limit)
+    return {"results": results, "query": q}
 
 
 @app.post("/refilter")
