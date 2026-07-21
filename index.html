@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisis de Inventario - Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d27;
+            --bg-card: #222639;
+            --bg-hover: #2a2e45;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --accent-dark: #4f46e5;
+            --green: #22c55e;
+            --green-bg: rgba(34,197,94,0.12);
+            --red: #ef4444;
+            --red-bg: rgba(239,68,68,0.12);
+            --yellow: #eab308;
+            --yellow-bg: rgba(234,179,8,0.12);
+            --blue: #3b82f6;
+            --blue-bg: rgba(59,130,246,0.12);
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-bottom: 1px solid var(--border);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+        .header-subtitle { font-size: 0.85rem; color: var(--text-muted); }
+        .header-right { display: flex; align-items: center; gap: 16px; }
+        .api-key-section { display: flex; align-items: center; gap: 10px; }
+        .api-key-section input {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            width: 280px;
+            transition: border-color 0.2s;
+        }
+        .api-key-section input:focus { outline: none; border-color: var(--accent); }
+        .api-key-section label { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; }
+        .api-key-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            animation: badgePop 0.3s ease;
+        }
+        @keyframes badgePop { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .api-key-badge.ok { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+        .api-key-badge.error { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+        .btn-clear {
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .btn-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+        .btn-verify {
+            padding: 6px 14px;
+            background: var(--accent-dark);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-verify:hover { background: var(--accent); }
+        .btn-verify:disabled { opacity: 0.5; cursor: not-allowed; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px 40px; }
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-secondary);
+            position: relative;
+        }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.05); }
+        .upload-zone .icon { font-size: 3rem; margin-bottom: 15px; opacity: 0.6; }
+        .upload-zone h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--text-primary); }
+        .upload-zone p { color: var(--text-muted); font-size: 0.9rem; }
+        .upload-zone input[type="file"] { display: none; }
+        .upload-zone .file-name {
+            margin-top: 15px;
+            padding: 8px 16px;
+            background: var(--accent-dark);
+            color: white;
+            border-radius: var(--radius-sm);
+            display: inline-block;
+            font-size: 0.85rem;
+        }
+        .loading-bar { height: 3px; background: var(--bg-card); border-radius: 2px; margin-top: 20px; overflow: hidden; display: none; }
+        .loading-bar.active { display: block; }
+        .loading-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-light)); animation: loading 1.5s ease-in-out infinite; width: 30%; }
+        @keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 30px 0; }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+        .kpi-card .label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .kpi-card .value { font-size: 1.8rem; font-weight: 700; letter-spacing: -1px; }
+        .kpi-card .sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+        .kpi-card.green .value { color: var(--green); }
+        .kpi-card.red .value { color: var(--red); }
+        .kpi-card.yellow .value { color: var(--yellow); }
+        .kpi-card.blue .value { color: var(--blue); }
+        .kpi-card.accent .value { color: var(--accent-light); }
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin: 30px 0 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title .badge { font-size: 0.75rem; background: var(--accent-dark); color: white; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+        .pivot-table-wrap {
+            overflow-x: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0;
+        }
+        .pivot-table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .pivot-table-wrap table th {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 10px 14px;
+            text-align: right;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+        .pivot-table-wrap table th:first-child { text-align: left; min-width: 220px; position: sticky; left: 0; z-index: 2; background: var(--bg-secondary); }
+        .pivot-table-wrap table th:hover { color: var(--text-primary); }
+        .pivot-table-wrap table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(51,65,85,0.4);
+            color: var(--text-primary);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .pivot-table-wrap table td:first-child { text-align: left; font-weight: 500; position: sticky; left: 0; z-index: 1; background: var(--bg-card); }
+        .pivot-table-wrap table tbody tr:nth-child(even) td { background: rgba(30,41,59,0.4); }
+        .pivot-table-wrap table tbody tr:nth-child(even) td:first-child { background: rgba(30,41,59,0.7); }
+        .pivot-table-wrap table tbody tr:hover td { background: var(--bg-hover); }
+        .pivot-table-wrap table tbody tr:hover td:first-child { background: var(--bg-hover); }
+        .pivot-table-wrap table .pivot-total-row td { background: rgba(99,102,241,0.08) !important; font-weight: 700; color: var(--accent-light); border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+        .pivot-table-wrap table .pivot-total-row td:first-child { background: rgba(99,102,241,0.12) !important; }
+        .pivot-table-wrap table td.cell-zero { color: var(--text-secondary); opacity: 0.5; }
+        .pivot-table-wrap table td.cell-row-num { text-align: center; color: var(--text-secondary); font-size: 0.75rem; width: 40px; min-width: 40px; }
+        .pivot-table-wrap table th.cell-row-num { text-align: center; width: 40px; min-width: 40px; }
+        .pivot-filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: rgba(99,102,241,0.06);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .pivot-filter-bar .filter-label { font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.5px; }
+        .pivot-filter-bar .filter-value { background: var(--accent); color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+        .pivot-summary-bar {
+            display: flex;
+            gap: 20px;
+            padding: 12px 16px;
+            background: rgba(30,41,59,0.5);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.78rem;
+        }
+        .pivot-summary-bar .ps-item { display: flex; align-items: center; gap: 6px; }
+        .pivot-summary-bar .ps-label { color: var(--text-secondary); }
+        .pivot-summary-bar .ps-value { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .toolbar { display: flex; gap: 12px; margin: 20px 0; align-items: center; flex-wrap: wrap; }
+        .search-box { flex: 1; min-width: 250px; position: relative; }
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px 10px 38px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-box .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem; pointer-events: none; }
+        .sort-select {
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .sort-select:focus { outline: none; border-color: var(--accent); }
+        .bodega-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .bodega-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .bodega-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.15); }
+        .bodega-card .name { font-size: 1rem; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
+        .bodega-card .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .bodega-card .metric { font-size: 0.8rem; }
+        .bodega-card .metric .mlabel { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; }
+        .bodega-card .metric .mval { font-weight: 600; font-size: 0.95rem; }
+        .bodega-card .compromiso-bar { margin-top: 12px; height: 6px; background: var(--bg-primary); border-radius: 3px; overflow: hidden; }
+        .bodega-card .compromiso-bar .fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+        .bodega-card .analyze-btn {
+            margin-top: 14px;
+            width: 100%;
+            padding: 10px;
+            background: var(--accent-dark);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .bodega-card .analyze-btn:hover { background: var(--accent); }
+        .bodega-card .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .actions-bar { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-light); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--bg-hover); }
+        .report-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            backdrop-filter: blur(4px);
+            overflow-y: auto;
+            padding: 40px 20px;
+        }
+        .report-modal.active { display: flex; justify-content: center; align-items: flex-start; }
+        .report-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            max-width: 900px;
+            width: 100%;
+            padding: 30px;
+            position: relative;
+            margin: auto;
+        }
+        .report-content .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .report-content .close-btn:hover { background: var(--red); }
+        .report-content h2 { font-size: 1.3rem; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); color: var(--accent-light); }
+        .report-body { font-size: 0.9rem; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; }
+        .report-body h3 { font-size: 1.05rem; color: var(--accent-light); margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+        .report-body ul, .report-body ol { padding-left: 24px; margin: 8px 0; }
+        .report-body li { margin: 4px 0; }
+        .report-body strong { color: var(--accent-light); }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 15px; opacity: 0.4; }
+        .empty-state h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--text-secondary); }
+        .empty-state p { font-size: 0.9rem; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 14px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 300;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { background: var(--green); color: white; }
+        .toast.error { background: var(--red); color: white; }
+        .detected-cols { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 20px; }
+        .col-tag {
+            padding: 4px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .col-tag .key { color: var(--accent-light); font-weight: 600; }
+        .progress-ctr { display: none; text-align: center; margin: 20px 0; }
+        .progress-ctr.active { display: block; }
+        .progress-ctr .status { font-size: 0.9rem; color: var(--text-secondary); margin-top: 10px; }
+        .progress-ctr .progress-bar { height: 6px; background: var(--bg-card); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+        .progress-ctr .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-light)); border-radius: 3px; transition: width 0.3s; width: 0%; }
+        .report-download-bar {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0 10px;
+            padding: 16px;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .report-download-bar .dl-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; margin-right: 8px; }
+        .report-download-bar .btn { padding: 8px 18px; font-size: 0.8rem; }
+        .bodega-card .card-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .bodega-card .card-actions .btn { flex: 1; justify-content: center; font-size: 0.75rem; padding: 7px 10px; }
+        .btn-word { background: #2b579a; color: white; }
+        .btn-word:hover { background: #3a6bb5; }
+        .btn-excel { background: #217346; color: white; }
+        .btn-excel:hover { background: #2d9259; }
+        .no-results { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.9rem; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .detail-section {
+            background: rgba(99,102,241,0.06);
+            border-radius: 8px;
+            padding: 10px 12px;
+            border: 1px solid rgba(99,102,241,0.12);
+        }
+        .detail-section .ds-title { font-size: 0.7rem; color: var(--accent-light); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; margin-bottom: 6px; }
+        .detail-section .ds-item { font-size: 0.75rem; color: var(--text-secondary); padding: 2px 0; display: flex; justify-content: space-between; }
+        .detail-section .ds-item span:last-child { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+        .sort-icon { font-size: 0.6rem; margin-left: 4px; opacity: 0.5; }
+        th:hover .sort-icon { opacity: 1; }
+        th.sort-active .sort-icon { opacity: 1; color: var(--accent-light); }
+        .cell-expand { cursor: pointer; text-align: center; width: 36px; min-width: 36px; }
+        .expand-icon { display: inline-block; transition: transform 0.2s; font-size: 0.8rem; color: var(--text-muted); }
+        .expand-icon.open { transform: rotate(90deg); }
+        .pivot-detail-row td { padding: 0 !important; border-bottom: 2px solid var(--accent); background: rgba(99,102,241,0.03) !important; }
+        .pivot-detail-row td:first-child { background: rgba(99,102,241,0.06) !important; }
+        .detail-panel { padding: 16px 20px 16px 56px; animation: slideDown 0.2s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .detail-panel-section { margin-bottom: 12px; }
+        .detail-panel-section .dps-title { font-size: 0.75rem; color: var(--accent-light); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .detail-panel-section .dps-title:hover { color: var(--text-primary); }
+        .detail-panel-section .dps-title .dps-toggle { font-size: 0.65rem; transition: transform 0.2s; }
+        .detail-panel-section .dps-title .dps-toggle.open { transform: rotate(90deg); }
+        .detail-panel-section .dps-body { max-height: 250px; overflow-y: auto; }
+        .detail-panel-section .dps-body.collapsed { display: none; }
+        .detail-mini-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        .detail-mini-table th { background: var(--bg-secondary); color: var(--text-secondary); padding: 6px 10px; text-align: right; font-size: 0.68rem; text-transform: uppercase; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+        .detail-mini-table th:first-child { text-align: left; }
+        .detail-mini-table th:hover { color: var(--text-primary); }
+        .detail-mini-table td { padding: 5px 10px; border-bottom: 1px solid rgba(51,65,85,0.3); text-align: right; font-variant-numeric: tabular-nums; }
+        .detail-mini-table td:first-child { text-align: left; color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .detail-mini-table tbody tr:hover td { background: var(--bg-hover); }
+        .detail-search { width: 100%; padding: 5px 10px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: var(--radius-sm); font-size: 0.78rem; margin-bottom: 6px; }
+        .detail-search:focus { outline: none; border-color: var(--accent); }
+        .cell-currency { color: var(--green); }
+        .cell-zero { color: var(--text-secondary); opacity: 0.5; }
+        .cell-high { color: var(--red); font-weight: 600; }
+        .cell-mid { color: var(--yellow); }
+        .cell-low { color: var(--green); }
+        .multi-filter-bar { display: flex; gap: 12px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin: 16px 0; flex-wrap: wrap; align-items: center; }
+        .multi-filter-bar .mf-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-right: 4px; }
+        .multi-filter-bar select { padding: 6px 10px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: var(--radius-sm); font-size: 0.8rem; cursor: pointer; }
+        .multi-filter-bar select:focus { outline: none; border-color: var(--accent); }
+        .multi-filter-bar .active-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+        .multi-filter-bar .filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--accent-dark); color: white; border-radius: 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .multi-filter-bar .filter-chip:hover { background: var(--red); }
+        .multi-filter-bar .filter-chip .chip-x { font-size: 0.65rem; }
+        .bodega-ms-trigger { cursor: pointer; }
+        .bodega-ms-trigger:hover { opacity: 0.85; }
+        .bodega-ms-panel {
+            position: absolute; top: 100%; left: 0; z-index: 50;
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 0; width: 320px; max-height: 420px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.45); display: none; margin-top: 6px;
+        }
+        .bodega-ms-panel.open { display: flex; flex-direction: column; }
+        .bodega-ms-panel .bm-header { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); }
+        .bodega-ms-panel .bm-header .bm-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.3px; margin-bottom: 6px; }
+        .bodega-ms-panel .bm-header input { width: 100%; padding: 6px 10px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: var(--radius-sm); font-size: 0.8rem; }
+        .bodega-ms-panel .bm-header input:focus { outline: none; border-color: var(--accent); }
+        .bodega-ms-panel .bm-actions { display: flex; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+        .bodega-ms-panel .bm-actions button { flex: 1; padding: 5px 0; font-size: 0.72rem; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; }
+        .bodega-ms-panel .bm-actions .bm-sel-all { background: var(--accent-dark); color: white; border-color: var(--accent-dark); }
+        .bodega-ms-panel .bm-actions .bm-sel-all:hover { background: var(--accent); }
+        .bodega-ms-panel .bm-actions .bm-clear { background: var(--bg-card); color: var(--text-secondary); }
+        .bodega-ms-panel .bm-actions .bm-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+        .bodega-ms-list { overflow-y: auto; flex: 1; padding: 6px 0; }
+        .bodega-ms-list .bm-option { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; transition: background 0.12s; font-size: 0.8rem; color: var(--text-primary); }
+        .bodega-ms-list .bm-option:hover { background: var(--bg-hover); }
+        .bodega-ms-list .bm-option.selected { background: rgba(99,102,241,0.12); color: var(--accent-light); }
+        .bodega-ms-list .bm-option input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+        .bodega-ms-footer { padding: 8px 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .bodega-ms-footer .bm-count { font-size: 0.72rem; color: var(--text-muted); }
+        .bodega-ms-footer .bm-apply { padding: 6px 14px; background: var(--accent-dark); color: white; border: none; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+        .bodega-ms-footer .bm-apply:hover { background: var(--accent); }
+        .bodega-active-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 16px 8px; }
+        .bodega-active-chips .bchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--accent-dark); color: white; border-radius: 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .bodega-active-chips .bchip:hover { background: var(--red); }
+        .bodega-active-chips .bchip .bchip-x { font-size: 0.65rem; }
+        .bodega-active-chips .bchip-remove-all { background: var(--red-bg); color: var(--red); }
+        .alerts-section { margin: 16px 0; }
+        .alert-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .alert-badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 500; border: 1px solid; }
+        .alert-badge.alert-red { background: var(--red-bg); color: var(--red); border-color: rgba(239,68,68,0.3); }
+        .alert-badge.alert-yellow { background: var(--yellow-bg); color: var(--yellow); border-color: rgba(234,179,8,0.3); }
+        .alert-badge .alert-count { font-weight: 700; }
+        .card-expand-list { margin-top: 8px; }
+        .card-expand-list summary { font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; padding: 4px 0; list-style: none; display: flex; align-items: center; gap: 6px; }
+        .card-expand-list summary::-webkit-details-marker { display: none; }
+        .card-expand-list summary::before { content: '\\25B6'; font-size: 0.55rem; transition: transform 0.2s; }
+        .card-expand-list[open] summary::before { transform: rotate(90deg); }
+        .card-expand-list .cel-items { max-height: 150px; overflow-y: auto; margin-top: 4px; }
+        .card-expand-list .cel-item { display: flex; justify-content: space-between; font-size: 0.73rem; padding: 2px 0; color: var(--text-secondary); border-bottom: 1px solid rgba(51,65,85,0.2); }
+        .card-expand-list .cel-item span:last-child { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+        @media (max-width: 768px) {
+            .header { padding: 15px 20px; flex-direction: column; gap: 12px; }
+            .container { padding: 20px; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .bodega-grid { grid-template-columns: 1fr; }
+            .api-key-section input { width: 100%; }
+            .api-key-section { flex-direction: column; align-items: stretch; }
+            .toolbar { flex-direction: column; }
+            .search-box { min-width: 100%; }
+            .detail-grid { grid-template-columns: 1fr; }
+            .multi-filter-bar { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1>Analisis de Inventario</h1>
+            <div class="header-subtitle">Dashboard de gestion y analisis por bodega</div>
+        </div>
+        <div class="header-right">
+            <button class="btn-clear" id="clearBtn" style="display:none;" onclick="clearData()">Limpiar datos</button>
+            <div class="api-key-section">
+                <select id="aiProvider" class="sort-select" style="width:auto; font-size:0.8rem;" onchange="onProviderChange()">
+                    <option value="gemini">Gemini</option>
+                    <option value="claude">Claude</option>
+                    <option value="openai">ChatGPT</option>
+                </select>
+                <input type="password" id="apiKey" placeholder="Tu API key..." autocomplete="off">
+                <button class="btn-verify" id="verifyBtn" onclick="verifyApiKey()" title="Verificar conexion">Verificar</button>
+                <span class="api-key-badge" id="apiKeyBadge" style="display:none;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="upload-zone" id="uploadZone">
+            <div class="icon">&#128230;</div>
+            <h3>Cargar archivo Excel de inventario</h3>
+            <p>Arrastra el archivo aqui o haz clic para seleccionar</p>
+            <p style="margin-top:8px; font-size:0.8rem;">Soporta archivos .xlsx con datos de inventario y tabla dinamica</p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls">
+            <div id="fileName" style="display:none;"></div>
+        </div>
+        <div class="loading-bar" id="loadingBar"><div class="fill"></div></div>
+
+        <div id="dashboard" style="display:none;">
+
+            <div class="kpi-grid" id="kpiGrid"></div>
+
+            <div id="detectedSection" style="display:none;">
+                <div class="section-title">Columnas detectadas</div>
+                <div class="detected-cols" id="detectedCols"></div>
+            </div>
+
+            <div id="pivotSection" style="display:none;">
+                <div class="section-title">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Tabla Dinamica
+                    </span>
+                    <span class="badge" id="pivotBadge"></span>
+                </div>
+                <div id="pivotFiltersWrap">
+                    <div class="multi-filter-bar" id="multiFilterBar">
+                        <span class="mf-label">Filtros:</span>
+                        <select id="filterCanal" onchange="applyMultiFilter()">
+                            <option value="">Todos los canales</option>
+                        </select>
+                        <select id="filterCategoria" onchange="applyMultiFilter()">
+                            <option value="">Todas las categorias</option>
+                        </select>
+                        <select id="filterEstado" onchange="applyMultiFilter()">
+                            <option value="">Todos los estados</option>
+                        </select>
+                        <select id="filterLinea" onchange="applyMultiFilter()">
+                            <option value="">Todas las lineas</option>
+                        </select>
+                        <div class="active-filters" id="activeFilters"></div>
+                    </div>
+                </div>
+                <div id="bodegaMsWrap" style="position:relative; display:inline-block;">
+                    <div class="pivot-filter-bar bodega-ms-trigger" id="bodegaMsTrigger" onclick="toggleBodegaMultiSelect()">
+                        <span class="filter-label">Bodega:</span>
+                        <span class="filter-value" id="bodegaMsLabel">Todas</span>
+                        <span style="font-size:0.6rem; margin-left:4px; opacity:0.7;">&#9660;</span>
+                    </div>
+                    <div class="bodega-ms-panel" id="bodegaMsPanel">
+                        <div class="bm-header">
+                            <div class="bm-title">Seleccionar bodegas</div>
+                            <input type="text" placeholder="Buscar bodega..." id="bodegaMsSearch" oninput="filterBodegaMsList(this.value)">
+                        </div>
+                        <div class="bm-actions">
+                            <button class="bm-sel-all" onclick="toggleAllBodegasMs(true)">Seleccionar todas</button>
+                            <button class="bm-clear" onclick="toggleAllBodegasMs(false)">Limpiar</button>
+                        </div>
+                        <div class="bodega-ms-list" id="bodegaMsList"></div>
+                        <div class="bodega-ms-footer">
+                            <span class="bm-count" id="bodegaMsCount">0 seleccionadas</span>
+                            <button class="bm-apply" onclick="applyBodegaMsFilter()">Aplicar</button>
+                        </div>
+                    </div>
+                    <div class="bodega-active-chips" id="bodegaMsChips"></div>
+                </div>
+                <div class="pivot-table-wrap" id="pivotWrap"></div>
+            </div>
+
+            <div class="actions-bar" id="actionsBar" style="display:none;">
+                <button class="btn btn-primary" id="analyzeAllBtn" onclick="analyzeAll()">
+                    Generar informes para todas las bodegas
+                </button>
+            </div>
+
+            <div id="progressSection" class="progress-ctr">
+                <div class="status" id="progressStatus">Generando informes...</div>
+                <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+            </div>
+
+            <div class="section-title">
+                Bodegas
+                <span class="badge" id="bodegaCount"></span>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <span class="search-icon">&#128269;</span>
+                    <input type="text" id="searchInput" placeholder="Buscar bodega por nombre..." oninput="filterBodegas()">
+                </div>
+                <select class="sort-select" id="sortSelect" onchange="filterBodegas()">
+                    <option value="valor-desc">Valor (mayor)</option>
+                    <option value="valor-asc">Valor (menor)</option>
+                    <option value="existencia-desc">Existencia (mayor)</option>
+                    <option value="existencia-asc">Existencia (menor)</option>
+                    <option value="compromiso-desc">Compromiso (mayor)</option>
+                    <option value="registros-desc">Registros (mayor)</option>
+                    <option value="registros-asc">Registros (menor)</option>
+                    <option value="name-asc">Nombre A-Z</option>
+                    <option value="name-desc">Nombre Z-A</option>
+                    <option value="margen-desc">Margen (mayor)</option>
+                    <option value="items-desc">Items (mayor)</option>
+                </select>
+            </div>
+
+            <div class="bodega-grid" id="bodegaGrid"></div>
+            <div class="no-results" id="noResults" style="display:none;">No se encontraron bodegas</div>
+
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <div class="icon">&#128230;</div>
+            <h3>Sin datos cargados</h3>
+            <p>Sube un archivo Excel de inventario para comenzar el analisis</p>
+        </div>
+
+    </div>
+
+    <div class="report-modal" id="reportModal">
+        <div class="report-content">
+            <button class="close-btn" onclick="closeReport()">&times;</button>
+            <h2 id="reportTitle"></h2>
+            <div class="report-download-bar" id="reportDownloadBar" style="display:none;">
+                <span class="dl-label">Descargar informe:</span>
+                <button class="btn btn-word" id="dlWordBtn" onclick="downloadCurrentReport('word')">
+                    Descargar Word (.docx)
+                </button>
+                <button class="btn btn-excel" id="dlExcelBtn" onclick="downloadCurrentReport('excel')">
+                    Descargar Excel (.xlsx)
+                </button>
+            </div>
+            <div class="report-body" id="reportBody"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+            ? ''
+            : 'https://analisis-inventario.onrender.com';
+        let appData = null;
+        let currentReportBodega = '';
+        let toastTimer = null;
+        let pivotSortState = { col: -1, asc: false };
+        let expandedPivotRows = {};
+        let pivotDataRows = [];
+        let detailSortStates = {};
+        let detailSearchQueries = {};
+        let expandedDetailSections = {};
+        let activeFilters = { canal: '', categoria: '', estado: '', linea: '' };
+        let selectedBodegas = new Set();
+        let bodegaMsOpen = false;
+
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const loadingBar = document.getElementById('loadingBar');
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', () => { uploadZone.classList.remove('dragover'); });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+        fileInput.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) uploadFile(file); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeReport(); });
+
+        async function uploadFile(file) {
+            if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+                showToast('Solo se permiten archivos Excel (.xlsx)', 'error');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            loadingBar.classList.add('active');
+            uploadZone.style.opacity = '0.5';
+
+            try {
+                const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: formData });
+                if (!res.ok) {
+                    let msg = 'Error al cargar el archivo';
+                    try { const errData = await res.json(); msg = errData.detail || msg; } catch (e) {}
+                    showToast(msg, 'error');
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('fileName').style.display = 'inline-block';
+                document.getElementById('fileName').className = 'file-name';
+                document.getElementById('fileName').textContent = data.filename;
+                document.getElementById('clearBtn').style.display = 'inline-flex';
+                showToast(`Archivo cargado: ${data.total_rows} registros, ${data.bodegas} bodegas`, 'success');
+                await loadData();
+            } catch (err) {
+                if (API_BASE) {
+                    showToast('Error de conexion con el servidor de Render. Verifica que este activo en ' + API_BASE, 'error');
+                } else {
+                    showToast('Error de conexion. Verifica que el servidor este corriendo en http://127.0.0.1:8001', 'error');
+                }
+                console.error(err);
+            } finally {
+                loadingBar.classList.remove('active');
+                uploadZone.style.opacity = '1';
+            }
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch(`${API_BASE}/data`);
+                if (!res.ok) { let msg = 'Error cargando datos'; try { const errData = await res.json(); msg = errData.detail || msg; } catch(e){} showToast(msg, 'error'); return; }
+                appData = await res.json();
+                renderDashboard();
+            } catch (err) { showToast('Error de conexion al cargar datos', 'error'); console.error(err); }
+        }
+
+        function renderDashboard() {
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('actionsBar').style.display = 'flex';
+            if (selectedBodegas.size === 0 && appData && appData.bodega_metrics) {
+                const defaults = ['80500', '80902', '80906'];
+                appData.bodega_metrics.forEach(m => {
+                    if (defaults.includes(m.bodega_codigo)) selectedBodegas.add(m.bodega);
+                });
+                updateBodegaMsLabel();
+                renderBodegaMsChips();
+            }
+            renderKPIs();
+            renderDetectedColumns();
+            populateFilters();
+            renderPivotTable();
+            filterBodegas();
+        }
+
+        function renderKPIs() {
+            const gs = appData.global_summary;
+            const grid = document.getElementById('kpiGrid');
+            grid.innerHTML = `
+                <div class="kpi-card accent">
+                    <div class="label">Valor Total</div>
+                    <div class="value">${formatCurrency(gs.total_valor)}</div>
+                    <div class="sub">${gs.total_bodegas} bodegas</div>
+                </div>
+                <div class="kpi-card blue">
+                    <div class="label">Existencia Total</div>
+                    <div class="value">${formatNum(gs.total_existencia)}</div>
+                    <div class="sub">${gs.total_refs_unicas} referencias</div>
+                </div>
+                <div class="kpi-card yellow">
+                    <div class="label">Comprometida</div>
+                    <div class="value">${formatNum(gs.total_comprometida)}</div>
+                    <div class="sub">Compromiso activo</div>
+                </div>
+                <div class="kpi-card green">
+                    <div class="label">Disponible</div>
+                    <div class="value">${formatNum(gs.total_disponible)}</div>
+                    <div class="sub">Listo para entrega</div>
+                </div>
+                <div class="kpi-card red">
+                    <div class="label">Compromiso Global</div>
+                    <div class="value">${gs.compromiso_global_pct}%</div>
+                    <div class="sub">${formatNum(gs.total_comprometida)} / ${formatNum(gs.total_existencia)}</div>
+                </div>
+                <div class="kpi-card accent">
+                    <div class="label">Sin Movimiento</div>
+                    <div class="value">${formatNum(gs.total_sin_movimiento)}</div>
+                    <div class="sub">Items sin ultima salida</div>
+                </div>
+                <div class="kpi-card green">
+                    <div class="label">Margen Promedio</div>
+                    <div class="value">${gs.margen_promedio}%</div>
+                    <div class="sub">Promedio sistema</div>
+                </div>
+                <div class="kpi-card blue">
+                    <div class="label">Precio Promedio</div>
+                    <div class="value">${formatCurrency(gs.precio_unitario_promedio)}</div>
+                    <div class="sub">Unitario promedio</div>
+                </div>
+            `;
+        }
+
+        function renderDetectedColumns() {
+            const cols = appData.detected_columns;
+            if (!cols || Object.keys(cols).length === 0) return;
+            document.getElementById('detectedSection').style.display = 'block';
+            const container = document.getElementById('detectedCols');
+            const labels = {
+                referencia: 'Referencia', desc_item: 'Desc. Item', bodega: 'Bodega',
+                desc_bodega: 'Desc. Bodega', linea: 'Linea', sub_linea: 'Sub-Linea',
+                diseno: 'Diseno', canal: 'Canal', categoria: 'Categoria',
+                estado: 'Estado', proveedor: 'Proveedor', desc_co: 'Desc. C.O.',
+                cant_disponible: 'Cant. Disponible', existencia: 'Existencia',
+                cant_comprometida: 'Cant. Comprometida', valor_total: 'Valor Total',
+                margen: 'Margen', precio_unitario: 'Precio Unit.',
+            };
+            container.innerHTML = Object.entries(cols)
+                .filter(([k, v]) => v !== null)
+                .map(([k, v]) => `<span class="col-tag"><span class="key">${labels[k] || k}</span>: ${v}</span>`)
+                .join('');
+        }
+
+        function renderPivotTable() {
+            const pivot = appData.pivot_table;
+            if (!pivot || !pivot.data || pivot.data.length === 0) return;
+            document.getElementById('pivotSection').style.display = 'block';
+
+            const wrap = document.getElementById('pivotWrap');
+            const metrics = appData.bodega_metrics || [];
+            const filtered = selectedBodegas.size > 0
+                ? metrics.filter(m => selectedBodegas.has(m.bodega))
+                : metrics;
+
+            const headers = ['Bodega', 'Comprometida', 'Existencia', 'Disponible'];
+            const dataRows = filtered.map(m => [
+                m.bodega,
+                m.cant_comprometida,
+                m.existencia,
+                m.cant_disponible
+            ]);
+            const sumC = filtered.reduce((s, m) => s + m.cant_comprometida, 0);
+            const sumE = filtered.reduce((s, m) => s + m.existencia, 0);
+            const sumD = filtered.reduce((s, m) => s + m.cant_disponible, 0);
+            const totalRow = ['Total', sumC, sumE, sumD];
+
+            pivotDataRows = dataRows;
+
+            if (selectedBodegas.size > 0) {
+                document.getElementById('pivotBadge').textContent = filtered.length === metrics.length
+                    ? (pivot.filter_value || 'Todas')
+                    : `${filtered.length} bodegas`;
+            } else if (pivot.filter_value) {
+                document.getElementById('pivotBadge').textContent = pivot.filter_value;
+            }
+
+            function renderSummary(data) {
+                let sC = 0, sE = 0, sD = 0;
+                data.forEach(row => {
+                    sC += typeof row[1] === 'number' ? row[1] : 0;
+                    sE += typeof row[2] === 'number' ? row[2] : 0;
+                    sD += typeof row[3] === 'number' ? row[3] : 0;
+                });
+                const comp = sE > 0 ? (sC / sE * 100).toFixed(0) : 0;
+                let bar = '<div class="pivot-summary-bar">';
+                bar += `<div class="ps-item"><span class="ps-label">Bodegas:</span><span class="ps-value">${data.length}</span></div>`;
+                bar += `<div class="ps-item"><span class="ps-label">Comprometida:</span><span class="ps-value">${formatNum(sC)}</span></div>`;
+                bar += `<div class="ps-item"><span class="ps-label">Existencia:</span><span class="ps-value">${formatNum(sE)}</span></div>`;
+                bar += `<div class="ps-item"><span class="ps-label">Disponible:</span><span class="ps-value">${formatNum(sD)}</span></div>`;
+                bar += `<div class="ps-item"><span class="ps-label">Compromiso:</span><span class="ps-value" style="color:${comp > 70 ? '#f87171' : comp > 50 ? '#fbbf24' : '#34d399'}">${comp}%</span></div>`;
+                bar += '</div>';
+                return bar;
+            }
+
+            function render() {
+                let html = '';
+                html += renderSummary(dataRows);
+                html += '<div style="overflow-x:auto;">';
+                html += '<table><thead><tr>';
+                html += '<th class="cell-row-num">#</th>';
+                html += '<th class="cell-expand" style="width:36px;min-width:36px;"></th>';
+                headers.forEach((h, i) => {
+                    const isSorted = pivotSortState.col === i;
+                    const sortClass = isSorted ? ' sort-active' : '';
+                    const arrow = isSorted ? (pivotSortState.asc ? '&#9650;' : '&#9660;') : '<span class="sort-icon">&#9650;&#9660;</span>';
+                    html += `<th class="${sortClass}" onclick="sortPivotCol(${i})">${h} ${arrow}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                dataRows.forEach((row, rowIdx) => {
+                    const isExpanded = expandedPivotRows[rowIdx];
+                    html += '<tr>';
+                    html += `<td class="cell-row-num">${rowIdx + 1}</td>`;
+                    html += `<td class="cell-expand" onclick="toggleExpandPivotRow(${rowIdx})"><span class="expand-icon${isExpanded ? ' open' : ''}">&#9654;</span></td>`;
+                    row.forEach((cell, i) => {
+                        if (cell === null || cell === undefined) { html += '<td></td>'; return; }
+                        let cls = '';
+                        if (i === 0) { html += `<td style="font-weight:600">${escHtml(cell)}</td>`; return; }
+                        if (typeof cell === 'number') {
+                            if (cell === 0) cls = 'cell-zero';
+                        }
+                        html += `<td class="${cls}">${typeof cell === 'number' ? formatNum(cell) : cell}</td>`;
+                    });
+                    html += '</tr>';
+                    if (isExpanded) {
+                        html += `<tr class="pivot-detail-row"><td colspan="${headers.length + 2}">`;
+                        html += `<div class="detail-panel" id="pivotDetail_${rowIdx}">`;
+                        html += buildPivotDetailPanel(row[0]);
+                        html += '</div></td></tr>';
+                    }
+                });
+                html += '<tr class="pivot-total-row">';
+                html += '<td class="cell-row-num"></td>';
+                html += '<td></td>';
+                totalRow.forEach((cell, i) => {
+                    if (cell === null || cell === undefined) { html += '<td></td>'; return; }
+                    if (typeof cell === 'number') { html += `<td>${formatNum(cell)}</td>`; }
+                    else { html += `<td style="font-weight:700;color:var(--accent-light)">${escHtml(cell)}</td>`; }
+                });
+                html += '</tr>';
+                html += '</tbody></table></div>';
+                wrap.innerHTML = html;
+            }
+            render();
+        }
+
+        function buildPivotDetailPanel(bodegaName) {
+            if (!appData || !appData.bodega_metrics) return '<p style="color:var(--text-muted)">Sin datos</p>';
+            const bodega = appData.bodega_metrics.find(m => m.bodega === bodegaName);
+            if (!bodega) return `<p style="color:var(--text-muted)">Bodega "${escHtml(bodegaName)}" no encontrada en metricas</p>`;
+            const bId = bodegaName.replace(/[^a-zA-Z0-9]/g, '_');
+            let html = '';
+
+            if (bodega.por_linea && Object.keys(bodega.por_linea).length > 0) {
+                html += renderDetailSection(bId, 'linea', 'Lineas de Producto', bodega.por_linea,
+                    ['Linea', 'Existencia', 'Comprometida', 'Valor', 'Margen'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total), v.margen + '%']);
+            }
+            if (bodega.por_categoria && Object.keys(bodega.por_categoria).length > 0) {
+                html += renderDetailSection(bId, 'cat', 'Categorias', bodega.por_categoria,
+                    ['Categoria', 'Existencia', 'Comprometida', 'Valor', 'Margen'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total), v.margen + '%']);
+            }
+            if (bodega.por_estado && Object.keys(bodega.por_estado).length > 0) {
+                html += renderDetailSection(bId, 'estado', 'Estados', bodega.por_estado,
+                    ['Estado', 'Existencia', 'Comprometida', 'Valor'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total)]);
+            }
+            if (bodega.por_canal && Object.keys(bodega.por_canal).length > 0) {
+                html += renderDetailSection(bId, 'canal', 'Canales', bodega.por_canal,
+                    ['Canal', 'Existencia', 'Comprometida', 'Valor'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total)]);
+            }
+            if (bodega.por_proveedor && Object.keys(bodega.por_proveedor).length > 0) {
+                html += renderDetailSection(bId, 'prov', 'Proveedores', bodega.por_proveedor,
+                    ['Proveedor', 'Existencia', 'Comprometida', 'Valor', 'Margen'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total), v.margen + '%']);
+            }
+            if (bodega.top_items && bodega.top_items.length > 0) {
+                html += renderDetailSection(bId, 'items', 'Top Items por Valor', bodega.top_items.reduce((acc, item) => { acc[item.item] = item; return acc; }, {}),
+                    ['Item', 'Existencia', 'Comprometida', 'Valor', 'Precio'],
+                    (k, v) => [k, formatNum(v.existencia), formatNum(v.comprometida), formatCurrency(v.valor_total), formatCurrency(v.precio_unitario)]);
+            }
+            return html || '<p style="color:var(--text-muted)">Sin detalle disponible</p>';
+        }
+
+        function renderDetailSection(bId, sId, title, data, headers, rowFn) {
+            const secKey = `${bId}_${sId}`;
+            const isOpen = expandedDetailSections[secKey] !== false;
+            const searchKey = `${secKey}_search`;
+            const sortKey = `${secKey}_sort`;
+            if (!detailSearchQueries[searchKey]) detailSearchQueries[searchKey] = '';
+            if (!detailSortStates[sortKey]) detailSortStates[sortKey] = { col: -1, asc: false };
+
+            let entries = Object.entries(data);
+            if (detailSearchQueries[searchKey]) {
+                const q = detailSearchQueries[searchKey].toLowerCase();
+                entries = entries.filter(([k]) => k.toLowerCase().includes(q));
+            }
+            if (detailSortStates[sortKey].col >= 0) {
+                const sc = detailSortStates[sortKey].col;
+                const sa = detailSortStates[sortKey].asc;
+                entries.sort((a, b) => {
+                    const rowA = rowFn(a[0], a[1]);
+                    const rowB = rowFn(b[0], b[1]);
+                    const va = sc === 0 ? rowA[0] : (typeof rowA[sc] === 'string' ? parseFloat(rowA[sc].replace(/[$,%]/g, '')) || 0 : rowA[sc]);
+                    const vb = sc === 0 ? rowB[0] : (typeof rowB[sc] === 'string' ? parseFloat(rowB[sc].replace(/[$,%]/g, '')) || 0 : rowB[sc]);
+                    if (typeof va === 'string') return sa ? va.localeCompare(vb) : vb.localeCompare(va);
+                    return sa ? va - vb : vb - va;
+                });
+            }
+
+            let html = `<div class="detail-panel-section">`;
+            html += `<div class="dps-title" onclick="toggleDetailSection('${secKey}')"><span class="dps-toggle${isOpen ? ' open' : ''}">&#9654;</span> ${title} <span style="color:var(--text-muted); font-weight:400; font-size:0.68rem;">(${Object.keys(data).length})</span></div>`;
+            html += `<div class="dps-body${isOpen ? '' : ' collapsed'}">`;
+            if (entries.length > 0) {
+                if (entries.length > 5) {
+                    html += `<input class="detail-search" placeholder="Buscar en ${title.toLowerCase()}..." value="${escHtml(detailSearchQueries[searchKey])}" oninput="onDetailSearch('${searchKey}', this.value, '${bId}')">`;
+                }
+                html += '<table class="detail-mini-table"><thead><tr>';
+                headers.forEach((h, i) => {
+                    const isSorted = detailSortStates[sortKey].col === i;
+                    const arrow = isSorted ? (detailSortStates[sortKey].asc ? ' &#9650;' : ' &#9660;') : '';
+                    html += `<th onclick="sortDetailCol('${sortKey}', ${i}, '${bId}')">${h}${arrow}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                entries.forEach(([k, v]) => {
+                    const cells = rowFn(k, v);
+                    html += '<tr>';
+                    cells.forEach((c, i) => {
+                        html += `<td>${c}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<p style="color:var(--text-muted); font-size:0.78rem; padding:4px 0;">Sin datos</p>';
+            }
+            html += '</div></div>';
+            return html;
+        }
+
+        function sortPivotCol(colIdx) {
+            if (colIdx < 0) return;
+            if (pivotSortState.col === colIdx) {
+                pivotSortState.asc = !pivotSortState.asc;
+            } else {
+                pivotSortState.col = colIdx;
+                pivotSortState.asc = false;
+            }
+            pivotDataRows.sort((a, b) => {
+                const va = typeof a[colIdx] === 'number' ? a[colIdx] : 0;
+                const vb = typeof b[colIdx] === 'number' ? b[colIdx] : 0;
+                return pivotSortState.asc ? va - vb : vb - va;
+            });
+            renderPivotTable();
+        }
+
+        function toggleExpandPivotRow(rowIdx) {
+            expandedPivotRows[rowIdx] = !expandedPivotRows[rowIdx];
+            renderPivotTable();
+        }
+
+        function toggleDetailSection(secKey) {
+            expandedDetailSections[secKey] = expandedDetailSections[secKey] === false;
+            renderPivotTable();
+        }
+
+        function onDetailSearch(searchKey, value) {
+            detailSearchQueries[searchKey] = value;
+            renderPivotTable();
+        }
+
+        function sortDetailCol(sortKey, colIdx) {
+            if (!detailSortStates[sortKey]) detailSortStates[sortKey] = { col: -1, asc: false };
+            if (detailSortStates[sortKey].col === colIdx) {
+                detailSortStates[sortKey].asc = !detailSortStates[sortKey].asc;
+            } else {
+                detailSortStates[sortKey].col = colIdx;
+                detailSortStates[sortKey].asc = colIdx === 0;
+            }
+            renderPivotTable();
+        }
+
+        function filterBodegas() {
+            if (!appData) return;
+            const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+            const sortVal = document.getElementById('sortSelect').value;
+            let metrics = [...appData.bodega_metrics];
+            if (query) { metrics = metrics.filter(m => m.bodega.toLowerCase().includes(query)); }
+            if (activeFilters.canal) { metrics = metrics.filter(m => m.por_canal && m.por_canal[activeFilters.canal]); }
+            if (activeFilters.categoria) { metrics = metrics.filter(m => m.por_categoria && m.por_categoria[activeFilters.categoria]); }
+            if (activeFilters.estado) { metrics = metrics.filter(m => m.por_estado && m.por_estado[activeFilters.estado]); }
+            if (activeFilters.linea) { metrics = metrics.filter(m => m.por_linea && m.por_linea[activeFilters.linea]); }
+            if (selectedBodegas.size > 0) { metrics = metrics.filter(m => selectedBodegas.has(m.bodega)); }
+            const [sortKey, sortDir] = sortVal.split('-');
+            metrics.sort((a, b) => {
+                let va, vb;
+                switch (sortKey) {
+                    case 'name': va = a.bodega; vb = b.bodega; return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                    case 'valor': va = a.valor_total; vb = b.valor_total; break;
+                    case 'existencia': va = a.existencia; vb = b.existencia; break;
+                    case 'compromiso': va = a.compromiso_pct; vb = b.compromiso_pct; break;
+                    case 'margen': va = a.margen_promedio || 0; vb = b.margen_promedio || 0; break;
+                    case 'items': va = a.items_unicos; vb = b.items_unicos; break;
+                    case 'registros': va = a.total_registros; vb = b.total_registros; break;
+                    default: return 0;
+                }
+                return sortDir === 'desc' ? vb - va : va - vb;
+            });
+            renderBodegas(metrics);
+        }
+
+        function renderBodegas(metrics) {
+            const grid = document.getElementById('bodegaGrid');
+            const noResults = document.getElementById('noResults');
+            document.getElementById('bodegaCount').textContent = metrics.length;
+            if (metrics.length === 0) { grid.innerHTML = ''; noResults.style.display = 'block'; return; }
+            noResults.style.display = 'none';
+
+            grid.innerHTML = metrics.map(m => {
+                const compromisoColor = m.compromiso_pct > 70 ? 'var(--red)' : m.compromiso_pct > 40 ? 'var(--yellow)' : 'var(--green)';
+                const sinMov = m.sin_movimiento || 0;
+                const lineaCount = Object.keys(m.por_linea || {}).length;
+                const provCount = Object.keys(m.por_proveedor || {}).length;
+                const topLinea = Object.entries(m.por_linea || {}).sort((a,b) => b[1].valor_total - a[1].valor_total)[0];
+                const topLineas = Object.entries(m.por_linea || {}).sort((a,b) => b[1].valor_total - a[1].valor_total).slice(0, 8);
+                const topItemsList = (m.top_items || []).slice(0, 8);
+                return `
+                    <div class="bodega-card" onclick="analyzeBodega('${escHtml(m.bodega)}')">
+                        <div class="name">${escHtml(m.bodega)}</div>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="mlabel">Existencia</div>
+                                <div class="mval" style="color:var(--accent-light);">${formatNum(m.existencia)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="mlabel">Comprometida</div>
+                                <div class="mval" style="color:var(--yellow);">${formatNum(m.cant_comprometida)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="mlabel">Valor</div>
+                                <div class="mval" style="color:var(--green);">${formatCurrency(m.valor_total)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="mlabel">Margen</div>
+                                <div class="mval" style="color:var(--blue);">${m.margen_promedio}%</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+                            <span style="font-size:0.8rem; color:var(--text-muted);">Compromiso ${m.compromiso_pct}%</span>
+                            <span style="font-size:0.75rem; color:var(--text-muted);">${m.items_unicos} items</span>
+                        </div>
+                        <div class="compromiso-bar">
+                            <div class="fill" style="width:${Math.min(m.compromiso_pct, 100)}%; background:${compromisoColor};"></div>
+                        </div>
+                        <div class="detail-grid">
+                            <div class="detail-section">
+                                <div class="ds-title">Resumen</div>
+                                <div class="ds-item"><span>Regs:</span><span>${formatNum(m.total_registros)}</span></div>
+                                <div class="ds-item"><span>Lineas:</span><span>${lineaCount}</span></div>
+                                <div class="ds-item"><span>Proveedores:</span><span>${provCount}</span></div>
+                                <div class="ds-item"><span>Sin mov.:</span><span style="color:${sinMov > 0 ? 'var(--red)' : 'var(--green)'}">${sinMov}</span></div>
+                            </div>
+                            ${topLinea ? `<div class="detail-section">
+                                <div class="ds-title">Top Linea</div>
+                                <div class="ds-item"><span>${topLinea[0].substring(0, 25)}</span></div>
+                                <div class="ds-item"><span>Valor:</span><span>${formatCurrency(topLinea[1].valor_total)}</span></div>
+                            </div>` : ''}
+                        </div>
+                        ${topLineas.length > 0 ? `
+                        <details class="card-expand-list" onclick="event.stopPropagation();">
+                            <summary>Lineas principales (${lineaCount})</summary>
+                            <div class="cel-items">
+                                ${topLineas.map(([k, v]) => `
+                                    <div class="cel-item"><span>${escHtml(k.substring(0, 30))}</span><span>${formatCurrency(v.valor_total)}</span></div>
+                                `).join('')}
+                            </div>
+                        </details>` : ''}
+                        ${topItemsList.length > 0 ? `
+                        <details class="card-expand-list" onclick="event.stopPropagation();">
+                            <summary>Top items (${m.top_items.length})</summary>
+                            <div class="cel-items">
+                                ${topItemsList.map(item => `
+                                    <div class="cel-item"><span>${escHtml(item.item.substring(0, 30))}</span><span>${formatCurrency(item.valor_total)}</span></div>
+                                `).join('')}
+                            </div>
+                        </details>` : ''}
+                        <button class="analyze-btn" onclick="event.stopPropagation(); analyzeBodega('${escHtml(m.bodega)}')">
+                            Generar informe
+                        </button>
+                        <div class="card-actions" onclick="event.stopPropagation();">
+                            <button class="btn btn-word" onclick="downloadReport('${escHtml(m.bodega)}', 'word')" title="Descargar Word">Word</button>
+                            <button class="btn btn-excel" onclick="downloadReport('${escHtml(m.bodega)}', 'excel')" title="Descargar Excel">Excel</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function analyzeBodega(name) {
+            const key = getApiKey();
+            if (!key) { showToast('Ingresa tu API key', 'error'); return; }
+            currentReportBodega = name;
+            const modal = document.getElementById('reportModal');
+            document.getElementById('reportTitle').textContent = `Informe: ${name}`;
+            document.getElementById('reportDownloadBar').style.display = 'none';
+            document.getElementById('reportBody').innerHTML = '<div style="text-align:center; padding:40px;"><div class="spinner"></div><div style="margin-top:15px; color:var(--text-secondary);">Generando informe...</div></div>';
+            modal.classList.add('active');
+            try {
+                const provider = document.getElementById('aiProvider').value;
+                const res = await fetch(`${API_BASE}/analyze/${encodeURIComponent(name)}`, {
+                    method: 'POST',
+                    headers: { 'X-Api-Key': key, 'X-Provider': provider },
+                });
+                const data = await res.json();
+                if (!res.ok) { document.getElementById('reportBody').innerHTML = `<div style="color:var(--red); padding:20px;">${escHtml(data.detail || 'Error generando informe')}</div>`; return; }
+                document.getElementById('reportBody').innerHTML = renderMarkdown(data.informe);
+                document.getElementById('reportDownloadBar').style.display = 'flex';
+            } catch (err) {
+                document.getElementById('reportBody').innerHTML = `<div style="color:var(--red); padding:20px;">Error de conexion: ${escHtml(err.message)}</div>`;
+            }
+        }
+
+        async function analyzeAll() {
+            const key = getApiKey();
+            if (!key) { showToast('Ingresa tu API key', 'error'); return; }
+            const btn = document.getElementById('analyzeAllBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Generando informes...';
+            const progressSection = document.getElementById('progressSection');
+            const progressStatus = document.getElementById('progressStatus');
+            const progressFill = document.getElementById('progressFill');
+            progressSection.classList.add('active');
+            progressFill.style.width = '0%';
+            const total = appData.bodega_metrics.length;
+            progressStatus.textContent = `Generando informe 1 de ${total}...`;
+            try {
+                const provider = document.getElementById('aiProvider').value;
+                const res = await fetch(`${API_BASE}/analyze-all`, {
+                    method: 'POST',
+                    headers: { 'X-Api-Key': key, 'X-Provider': provider },
+                });
+                const data = await res.json();
+                if (!res.ok) { showToast(data.detail || 'Error generando informes', 'error'); return; }
+                progressFill.style.width = '100%';
+                progressStatus.textContent = `${data.informes.length} informes generados correctamente`;
+                const modal = document.getElementById('reportModal');
+                let allReports = '';
+                data.informes.forEach((inf, i) => {
+                    allReports += `<h3>${escHtml(inf.bodega)}</h3>`;
+                    allReports += `<div class="report-single">${renderMarkdown(inf.informe)}</div>`;
+                    if (i < data.informes.length - 1) allReports += '<hr style="border:none; border-top:1px solid var(--border); margin:30px 0;">';
+                });
+                document.getElementById('reportTitle').textContent = `Informes de Todas las Bodegas (${data.informes.length})`;
+                document.getElementById('reportBody').innerHTML = allReports;
+                modal.classList.add('active');
+            } catch (err) {
+                showToast('Error de conexion', 'error');
+                progressStatus.textContent = 'Error al generar informes';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Generar informes para todas las bodegas';
+                setTimeout(() => { progressSection.classList.remove('active'); }, 3000);
+            }
+        }
+
+        function closeReport() { document.getElementById('reportModal').classList.remove('active'); }
+        document.getElementById('reportModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeReport(); });
+
+        async function verifyApiKey() {
+            const key = document.getElementById('apiKey').value.trim();
+            const badge = document.getElementById('apiKeyBadge');
+            const btn = document.getElementById('verifyBtn');
+            if (!key) { showToast('Ingresa una API key primero', 'error'); return; }
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>';
+            badge.style.display = 'inline-flex';
+            badge.className = 'api-key-badge';
+            badge.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;"></span> Verificando...';
+            badge.style.background = 'var(--blue-bg)';
+            badge.style.color = 'var(--blue)';
+            badge.style.border = '1px solid var(--blue)';
+            try {
+                const provider = document.getElementById('aiProvider').value;
+                const res = await fetch(`${API_BASE}/verify-key`, { method: 'POST', headers: { 'X-Api-Key': key, 'X-Provider': provider } });
+                const data = await res.json();
+                if (res.ok) { badge.className = 'api-key-badge ok'; badge.innerHTML = '&#10003; ' + (data.model || 'Conectado'); showToast('Conectado con ' + (data.model || provider), 'success'); }
+                else { badge.className = 'api-key-badge error'; badge.innerHTML = '&#10007; ' + (data.detail || 'Error'); showToast(data.detail || 'Error verificando API key', 'error'); }
+            } catch (err) {
+                badge.className = 'api-key-badge error';
+                badge.textContent = 'Error de conexion';
+                showToast(API_BASE ? 'No se pudo conectar con ' + API_BASE : 'Error de conexion con el servidor local', 'error');
+            } finally { btn.disabled = false; btn.innerHTML = 'Verificar'; }
+        }
+
+        function getApiKey() { return document.getElementById('apiKey').value.trim(); }
+        function onProviderChange() {
+            const provider = document.getElementById('aiProvider').value;
+            const input = document.getElementById('apiKey');
+            const placeholders = { gemini: 'AIzaSy...', claude: 'sk-ant-...', openai: 'sk-...' };
+            input.placeholder = placeholders[provider] || 'Tu API key...';
+            document.getElementById('apiKeyBadge').style.display = 'none';
+        }
+        document.getElementById('apiKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyApiKey(); });
+        document.getElementById('apiKey').addEventListener('input', () => { const badge = document.getElementById('apiKeyBadge'); badge.style.display = 'none'; badge.className = 'api-key-badge'; badge.innerHTML = ''; badge.style = ''; });
+
+        function formatNum(n) { if (n === null || n === undefined) return '-'; return Number(n).toLocaleString('es-CO', { maximumFractionDigits: 0 }); }
+        function formatCurrency(n) { if (n === null || n === undefined) return '-'; return '$' + Number(n).toLocaleString('es-CO', { maximumFractionDigits: 0 }); }
+        function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            let html = escHtml(text);
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h3 style="font-size:1.15rem;">$1</h3>');
+            html = html.replace(/^# (.+)$/gm, '<h3 style="font-size:1.25rem;">$1</h3>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            html = html.replace(/<\/ul>\s*<ul>/g, '');
+            html = html.replace(/\n{2,}/g, '<br><br>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function showToast(msg, type) {
+            if (toastTimer) clearTimeout(toastTimer);
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast ${type} show`;
+            toastTimer = setTimeout(() => { toast.className = 'toast'; }, 4000);
+        }
+
+        function clearData() {
+            appData = null;
+            currentReportBodega = '';
+            expandedPivotRows = {};
+            expandedDetailSections = {};
+            detailSearchQueries = {};
+            detailSortStates = {};
+            activeFilters = { canal: '', categoria: '', estado: '', linea: '' };
+            pivotSortState = { col: -1, asc: false };
+            selectedBodegas.clear();
+            bodegaMsOpen = false;
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('clearBtn').style.display = 'none';
+            document.getElementById('fileName').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+            fileInput.value = '';
+            showToast('Datos limpiados', 'success');
+        }
+
+        function populateFilters() {
+            if (!appData || !appData.global_summary) return;
+            const gs = appData.global_summary;
+            const canalSel = document.getElementById('filterCanal');
+            const catSel = document.getElementById('filterCategoria');
+            const estadoSel = document.getElementById('filterEstado');
+            const lineaSel = document.getElementById('filterLinea');
+            let hasFilters = false;
+            if (Object.keys(gs.canal_total || {}).length > 1) {
+                canalSel.innerHTML = '<option value="">Todos los canales</option>' +
+                    Object.keys(gs.canal_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+                hasFilters = true;
+            } else { canalSel.parentElement.style.display = 'none'; }
+            if (Object.keys(gs.categoria_total || {}).length > 1) {
+                catSel.innerHTML = '<option value="">Todas las categorias</option>' +
+                    Object.keys(gs.categoria_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+                hasFilters = true;
+            } else { catSel.parentElement.style.display = 'none'; }
+            if (Object.keys(gs.estado_total || {}).length > 1) {
+                estadoSel.innerHTML = '<option value="">Todos los estados</option>' +
+                    Object.keys(gs.estado_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+                hasFilters = true;
+            } else { estadoSel.parentElement.style.display = 'none'; }
+            if (Object.keys(gs.linea_total || {}).length > 1) {
+                lineaSel.innerHTML = '<option value="">Todas las lineas</option>' +
+                    Object.keys(gs.linea_total).sort().map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+                hasFilters = true;
+            } else { lineaSel.parentElement.style.display = 'none'; }
+            document.getElementById('pivotFiltersWrap').style.display = hasFilters ? 'block' : 'none';
+        }
+
+        function applyMultiFilter() {
+            activeFilters.canal = document.getElementById('filterCanal').value;
+            activeFilters.categoria = document.getElementById('filterCategoria').value;
+            activeFilters.estado = document.getElementById('filterEstado').value;
+            activeFilters.linea = document.getElementById('filterLinea').value;
+            renderActiveFilterChips();
+            filterBodegas();
+        }
+
+        function removeFilter(key) {
+            activeFilters[key] = '';
+            document.getElementById('filter' + key.charAt(0).toUpperCase() + key.slice(1)).value = '';
+            renderActiveFilterChips();
+            filterBodegas();
+        }
+
+        function renderActiveFilterChips() {
+            const container = document.getElementById('activeFilters');
+            const labels = { canal: 'Canal', categoria: 'Categoria', estado: 'Estado', linea: 'Linea' };
+            container.innerHTML = Object.entries(activeFilters)
+                .filter(([, v]) => v)
+                .map(([k, v]) => `<span class="filter-chip" onclick="removeFilter('${k}')">${labels[k]}: ${escHtml(v)} <span class="chip-x">&times;</span></span>`)
+                .join('');
+        }
+
+        function toggleBodegaMultiSelect() {
+            bodegaMsOpen = !bodegaMsOpen;
+            const panel = document.getElementById('bodegaMsPanel');
+            if (bodegaMsOpen) {
+                populateBodegaMsList();
+                panel.classList.add('open');
+            } else {
+                panel.classList.remove('open');
+            }
+        }
+
+        function populateBodegaMsList() {
+            if (!appData || !appData.bodega_metrics) return;
+            const allBodegas = appData.bodega_metrics.map(m => ({
+                name: m.bodega,
+                code: m.bodega_codigo || '',
+                label: m.bodega_codigo ? `${m.bodega_codigo} - ${m.bodega}` : m.bodega
+            })).sort((a, b) => a.label.localeCompare(b.label));
+            const list = document.getElementById('bodegaMsList');
+            list.innerHTML = allBodegas.map(b => {
+                const checked = selectedBodegas.has(b.name);
+                return `<label class="bm-option${checked ? ' selected' : ''}" data-name="${escHtml(b.name)}" data-code="${escHtml(b.code)}">
+                    <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleBodegaMs('${escHtml(b.name).replace(/'/g, "\\'")}')">
+                    <span>${escHtml(b.label)}</span>
+                </label>`;
+            }).join('');
+            updateBodegaMsCount();
+        }
+
+        function filterBodegaMsList(q) {
+            const query = q.toLowerCase().trim();
+            const items = document.querySelectorAll('#bodegaMsList .bm-option');
+            items.forEach(el => {
+                const name = (el.dataset.name || '').toLowerCase();
+                const code = (el.dataset.code || '').toLowerCase();
+                el.style.display = (name.includes(query) || code.includes(query)) ? '' : 'none';
+            });
+        }
+
+        function toggleAllBodegaMs(name) {
+            if (selectedBodegas.size > 0) { selectedBodegas.clear(); } else {
+                if (appData && appData.bodega_metrics) {
+                    appData.bodega_metrics.forEach(m => selectedBodegas.add(m.bodega));
+                }
+            }
+            populateBodegaMsList();
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+            bodegaMsOpen = false;
+            document.getElementById('bodegaMsPanel').classList.remove('open');
+        }
+
+        function toggleAllBodegasMs(selectAll) {
+            if (!selectAll) { selectedBodegas.clear(); } else {
+                if (appData && appData.bodega_metrics) {
+                    appData.bodega_metrics.forEach(m => selectedBodegas.add(m.bodega));
+                }
+            }
+            populateBodegaMsList();
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+            if (!selectAll) {
+                bodegaMsOpen = false;
+                document.getElementById('bodegaMsPanel').classList.remove('open');
+            }
+        }
+
+        function toggleBodegaMs(name) {
+            if (selectedBodegas.has(name)) { selectedBodegas.delete(name); } else { selectedBodegas.add(name); }
+            const opt = document.querySelector(`#bodegaMsList .bm-option[data-name="${CSS.escape(name)}"]`);
+            if (opt) opt.classList.toggle('selected');
+            updateBodegaMsCount();
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+        }
+
+        function updateBodegaMsCount() {
+            const total = appData && appData.bodega_metrics ? appData.bodega_metrics.length : 0;
+            const count = selectedBodegas.size === 0 ? total : selectedBodegas.size;
+            document.getElementById('bodegaMsCount').textContent = `${count} de ${total} seleccionadas`;
+        }
+
+        function applyBodegaMsFilter() {
+            bodegaMsOpen = false;
+            document.getElementById('bodegaMsPanel').classList.remove('open');
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+        }
+
+        function updateBodegaMsLabel() {
+            const label = document.getElementById('bodegaMsLabel');
+            const total = appData && appData.bodega_metrics ? appData.bodega_metrics.length : 0;
+            if (selectedBodegas.size === 0) {
+                label.textContent = 'Todas';
+            } else if (selectedBodegas.size === 1) {
+                label.textContent = [...selectedBodegas][0];
+            } else {
+                label.textContent = `${selectedBodegas.size} seleccionadas`;
+            }
+        }
+
+        function renderBodegaMsChips() {
+            const container = document.getElementById('bodegaMsChips');
+            if (selectedBodegas.size === 0) { container.innerHTML = ''; return; }
+            const names = [...selectedBodegas];
+            let html = names.slice(0, 5).map(n => `<span class="bchip" onclick="removeBodegaMs('${escHtml(n).replace(/'/g, "\\'")}')">${escHtml(n)} <span class="bchip-x">&times;</span></span>`).join('');
+            if (names.length > 5) html += `<span class="bchip bchip-remove-all">+${names.length - 5} mas</span>`;
+            html += `<span class="bchip bchip-remove-all" onclick="clearAllBodegaMs()">Quitar todas &times;</span>`;
+            container.innerHTML = html;
+        }
+
+        function removeBodegaMs(name) {
+            selectedBodegas.delete(name);
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+        }
+
+        function clearAllBodegaMs() {
+            selectedBodegas.clear();
+            updateBodegaMsLabel();
+            renderBodegaMsChips();
+            expandedPivotRows = {};
+            renderPivotTable();
+            filterBodegas();
+        }
+
+        document.addEventListener('click', (e) => {
+            const wrap = document.getElementById('bodegaMsWrap');
+            if (wrap && !wrap.contains(e.target) && bodegaMsOpen) {
+                bodegaMsOpen = false;
+                document.getElementById('bodegaMsPanel').classList.remove('open');
+            }
+        });
+
+        async function downloadReport(bodegaName, format) {
+            if (!appData) { showToast('Primero carga un archivo Excel', 'error'); return; }
+            currentReportBodega = bodegaName;
+            showToast(`Descargando informe de ${bodegaName} en ${format.toUpperCase()}...`, 'success');
+            try {
+                const res = await fetch(`${API_BASE}/download/${encodeURIComponent(bodegaName)}/${format}`);
+                if (!res.ok) { let msg = 'Error al descargar'; try { const data = await res.json(); msg = data.detail || msg; } catch(e){} showToast(msg, 'error'); return; }
+                const blob = await res.blob();
+                const ext = format === 'word' ? 'docx' : 'xlsx';
+                const safeName = bodegaName.replace(/\s+/g, '_').replace(/\./g, '').replace(/\//g, '_');
+                const filename = `Informe_${safeName}.${ext}`;
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                showToast(`Archivo descargado: ${filename}`, 'success');
+            } catch (err) { showToast('Error de conexion al descargar', 'error'); console.error(err); }
+        }
+
+        async function downloadCurrentReport(format) { if (currentReportBodega) await downloadReport(currentReportBodega, format); }
+    </script>
+
+</body>
+</html>
