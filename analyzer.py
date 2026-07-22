@@ -37,6 +37,7 @@ COLUMN_KEYWORDS = {
     "costo_prom_unit_ins": ["costo prom. unit. (ins)", "costo prom unit ins"],
     "costo_prom_tot_ins": ["costo prom. tot. (ins)", "costo prom tot ins"],
     "ubicacion": ["ubicacion"],
+    "nombre_vendedor": ["nombre vendedor", "vendedor", "asesor"],
 }
 
 
@@ -715,7 +716,8 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
 DISPLAY_COLS = ["bodega", "desc_bodega", "referencia", "desc_item", "linea",
                 "sub_linea", "categoria", "canal", "estado", "proveedor",
                 "existencia", "cant_comprometida", "cant_disponible",
-                "valor_total", "precio_unitario", "lote", "ubicacion"]
+                "valor_total", "precio_unitario", "lote", "ubicacion",
+                "nombre_vendedor"]
 
 
 def search_inventory(query: str, df: pd.DataFrame, limit: int = 50) -> list[dict]:
@@ -742,3 +744,57 @@ def search_inventory(query: str, df: pd.DataFrame, limit: int = 50) -> list[dict
                     item[col] = str(val).strip()
         results.append(item)
     return results
+
+
+def get_vendors(df: pd.DataFrame) -> list[dict]:
+    col = None
+    for c in df.columns:
+        if _match_column(c, COLUMN_KEYWORDS["nombre_vendedor"]):
+            col = c
+            break
+    if col is None:
+        return []
+    vendors = df[col].dropna().astype(str).str.strip()
+    vendors = vendors[vendors != ''].unique()
+    vendor_list = []
+    for v in sorted(vendors):
+        subset = df[df[col].astype(str).str.strip() == v]
+        total_items = len(subset)
+        existencia = pd.to_numeric(subset.get('existencia', pd.Series([0])), errors='coerce').fillna(0).sum()
+        valor_total = pd.to_numeric(subset.get('valor_total', pd.Series([0])), errors='coerce').fillna(0).sum()
+        refs = subset['referencia'].nunique() if 'referencia' in subset.columns else 0
+        bodegas = subset['desc_bodega'].dropna().unique().tolist() if 'desc_bodega' in subset.columns else []
+        vendor_list.append({
+            "nombre": v,
+            "total_items": int(total_items),
+            "existencia": float(existencia),
+            "valor_total": float(valor_total),
+            "refs_unicas": int(refs),
+            "bodegas": [str(b) for b in bodegas],
+        })
+    return vendor_list
+
+
+def get_vendor_items(df: pd.DataFrame, vendor_name: str) -> list[dict]:
+    col = None
+    for c in df.columns:
+        if _match_column(c, COLUMN_KEYWORDS["nombre_vendedor"]):
+            col = c
+            break
+    if col is None:
+        return []
+    subset = df[df[col].astype(str).str.strip() == vendor_name]
+    items = []
+    for _, row in subset.iterrows():
+        item = {}
+        for c in DISPLAY_COLS:
+            if c in row.index:
+                val = row[c]
+                if pd.isna(val):
+                    item[c] = None
+                elif isinstance(val, (int, float)):
+                    item[c] = round(float(val), 2)
+                else:
+                    item[c] = str(val).strip()
+        items.append(item)
+    return items
