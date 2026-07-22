@@ -536,6 +536,15 @@
         .ms-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
         .multi-filter-bar select { display: none; }
 
+        .email-vendor-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; font-size: 0.85rem; }
+        .email-vendor-item:hover { background: var(--bg-hover); }
+        .email-vendor-item input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+        .email-vendor-info { flex: 1; }
+        .email-vendor-name { font-weight: 600; color: var(--text-primary); }
+        .email-vendor-email { font-size: 0.75rem; color: var(--text-secondary); }
+        .email-vendor-stats { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+        .email-vendor-badge { font-size: 0.68rem; padding: 2px 6px; border-radius: 8px; background: var(--accent-dark); color: white; font-weight: 600; flex-shrink: 0; }
+
         .global-search-wrap { position: relative; margin: 16px 0; z-index: 90; }
         .global-search-box { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); transition: border-color 0.2s, box-shadow 0.2s; }
         .global-search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
@@ -820,8 +829,28 @@
                 <button class="btn btn-excel" id="dlExcelBtn" onclick="downloadCurrentReport('excel')">
                     Descargar Excel (.xlsx)
                 </button>
+                <button class="btn btn-primary" onclick="openEmailPanel()" style="margin-left:8px;">
+                    Enviar informes por correo
+                </button>
             </div>
             <div class="report-body" id="reportBody"></div>
+        </div>
+    </div>
+
+    <div class="report-modal" id="emailModal">
+        <div class="report-content" style="max-width:520px;">
+            <button class="close-btn" onclick="closeEmailPanel()">&times;</button>
+            <h2>Enviar Informes por Correo</h2>
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:12px;">Selecciona los asesores para enviar el informe de inventario por correo electronico.</p>
+            <div id="emailVendorList" style="margin-bottom:12px;"></div>
+            <div id="emailProgress" style="display:none; text-align:center; padding:16px;">
+                <div class="spinner"></div>
+                <div style="margin-top:10px; color:var(--text-secondary);" id="emailProgressText">Enviando...</div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn" onclick="selectAllVendors()" style="background:var(--accent-dark); color:white;">Seleccionar todas</button>
+                <button class="btn" onclick="sendVendorEmails()" id="sendEmailsBtn" style="background:var(--accent); color:white;">Enviar informes</button>
+            </div>
         </div>
     </div>
 
@@ -1915,6 +1944,83 @@
         }
 
         async function downloadCurrentReport(format) { if (currentReportBodega) await downloadReport(currentReportBodega, format); }
+
+        let emailVendors = [];
+
+        async function openEmailPanel() {
+            const modal = document.getElementById('emailModal');
+            const list = document.getElementById('emailVendorList');
+            const progress = document.getElementById('emailProgress');
+            const btn = document.getElementById('sendEmailsBtn');
+            progress.style.display = 'none';
+            btn.style.display = '';
+            list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);"><div class="spinner"></div> Cargando asesores...</div>';
+            modal.classList.add('active');
+            try {
+                const res = await fetch(`${API_BASE}/vendors`);
+                const data = await res.json();
+                emailVendors = data.vendors || [];
+                if (emailVendors.length === 0) {
+                    list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">No se encontraron asesores en los datos cargados.</div>';
+                    return;
+                }
+                list.innerHTML = emailVendors.map((v, i) => {
+                    const hasEmail = v.email && v.email.length > 0;
+                    return `<label class="email-vendor-item" style="${hasEmail ? '' : 'opacity:0.5;'}">
+                        <input type="checkbox" data-idx="${i}" ${hasEmail ? 'checked' : ''} ${hasEmail ? '' : 'disabled'}>
+                        <div class="email-vendor-info">
+                            <div class="email-vendor-name">${escHtml(v.nombre)}</div>
+                            <div class="email-vendor-email">${hasEmail ? escHtml(v.email) : 'Sin email configurado'}</div>
+                            <div class="email-vendor-stats">${v.total_items} registros | $${(v.valor_total || 0).toLocaleString('es-CO')} valor | ${v.refs_unicas} refs</div>
+                        </div>
+                        <span class="email-vendor-badge">${v.bodegas.length} bodega${v.bodegas.length !== 1 ? 's' : ''}</span>
+                    </label>`;
+                }).join('');
+            } catch (err) {
+                list.innerHTML = `<div style="color:var(--red); padding:20px;">Error al cargar asesores: ${escHtml(err.message)}</div>`;
+            }
+        }
+
+        function closeEmailPanel() {
+            document.getElementById('emailModal').classList.remove('active');
+        }
+
+        function selectAllVendors() {
+            document.querySelectorAll('#emailVendorList input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+        }
+
+        async function sendVendorEmails() {
+            const checked = document.querySelectorAll('#emailVendorList input[type="checkbox"]:checked');
+            if (checked.length === 0) { showToast('Selecciona al menos un asesor', 'error'); return; }
+            const names = Array.from(checked).map(cb => emailVendors[parseInt(cb.dataset.idx)]?.nombre).filter(Boolean);
+            const progress = document.getElementById('emailProgress');
+            const progressText = document.getElementById('emailProgressText');
+            const btn = document.getElementById('sendEmailsBtn');
+            btn.style.display = 'none';
+            progress.style.display = 'block';
+            progressText.textContent = `Enviando ${names.length} informe${names.length > 1 ? 's' : ''}...`;
+            try {
+                const res = await fetch(`${API_BASE}/send-emails`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vendors: names }),
+                });
+                const data = await res.json();
+                progress.style.display = 'none';
+                btn.style.display = '';
+                if (!res.ok) { showToast(data.detail || 'Error al enviar correos', 'error'); return; }
+                let msg = `${data.sent} informe${data.sent !== 1 ? 's' : ''} enviado${data.sent !== 1 ? 's' : ''} correctamente`;
+                if (data.errors && data.errors.length > 0) {
+                    msg += `. ${data.errors.length} error${data.errors.length > 1 ? 'es' : ''}: ${data.errors[0]}`;
+                }
+                showToast(msg, data.sent > 0 ? 'success' : 'error');
+                closeEmailPanel();
+            } catch (err) {
+                progress.style.display = 'none';
+                btn.style.display = '';
+                showToast('Error de conexion al enviar correos', 'error');
+            }
+        }
     </script>
 
 </body>
