@@ -488,10 +488,16 @@
         .bodega-ms-panel .bm-actions .bm-clear { background: var(--bg-card); color: var(--text-secondary); }
         .bodega-ms-panel .bm-actions .bm-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
         .bodega-ms-list { overflow-y: auto; flex: 1; padding: 6px 0; }
-        .bodega-ms-list .bm-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; transition: background 0.12s; font-size: 0.8rem; color: var(--text-primary); }
-        .bodega-ms-list .bm-option:hover { background: var(--bg-hover); }
-        .bodega-ms-list .bm-option.selected { background: rgba(99,102,241,0.12); color: var(--accent-light); }
-        .bodega-ms-list .bm-option input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+        .bodega-ms-list .bm-option,
+        .ms-panel .ms-list .bm-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; transition: background 0.12s; font-size: 0.8rem; color: var(--text-primary); border-bottom: 1px solid var(--border); }
+        .bodega-ms-list .bm-option:last-child,
+        .ms-panel .ms-list .bm-option:last-child { border-bottom: none; }
+        .bodega-ms-list .bm-option:hover,
+        .ms-panel .ms-list .bm-option:hover { background: var(--bg-hover); }
+        .bodega-ms-list .bm-option.selected,
+        .ms-panel .ms-list .bm-option.selected { background: rgba(99,102,241,0.12); color: var(--accent-light); }
+        .bodega-ms-list .bm-option input[type="checkbox"],
+        .ms-panel .ms-list .bm-option input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
         .ms-item-code { font-weight: 700; color: var(--accent-light); font-size: 0.78rem; }
         .ms-item-name { color: var(--text-primary); font-size: 0.78rem; }
         .bodega-ms-footer { padding: 8px 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
