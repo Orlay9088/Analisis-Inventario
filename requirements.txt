@@ -7,5 +7,6 @@ anthropic
 openai
 openpyxl
 pandas
+python-calamine
 python-docx
 matplotlib
