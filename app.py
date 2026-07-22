@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
-from analyzer import process_excel, build_bodega_prompt, search_inventory
+from analyzer import process_excel, build_bodega_prompt, search_inventory, get_vendors, get_vendor_items
 
 
 def to_serializable(obj):
@@ -1059,6 +1059,208 @@ async def download_excel(bodega_name: str):
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename="Informe_{safe_name}.xlsx"'}
     )
+
+
+VENDOR_EMAILS = {
+    "INES SANCHEZ": "ines.sanchez@interdoors.com.co",
+    "ELIANA": "eliana.gonzalez@interdoors.com.co",
+    "KAROLIN": "karolin.gonzalez@interdoors.com.co",
+    "MATEO POSADA": "mateo.posada@interdoors.com.co",
+    "LEONARDO": "asesor3@interdoors.com.co",
+    "YUDY CARRASQUILLA": "yudy.carrasquilla@interdoors.com.co",
+    "LAURA OCHOA": "laura.ochoa@interdoors.com.co",
+}
+
+
+@app.get("/vendors")
+async def list_vendors():
+    raw_df = current_data.get("raw_df")
+    if raw_df is None:
+        raise HTTPException(status_code=400, detail="No hay datos cargados.")
+    vendors = get_vendors(raw_df)
+    for v in vendors:
+        v["email"] = VENDOR_EMAILS.get(v["nombre"].upper(), "")
+    return {"vendors": vendors}
+
+
+def _generate_vendor_word_doc(vendor_name: str, items: list[dict]) -> io.BytesIO:
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+
+    doc = Document()
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+
+    title = doc.add_heading('', level=0)
+    run = title.add_run(f'Informe de Inventario - {vendor_name}')
+    run.font.color.rgb = RGBColor(79, 70, 229)
+    run.font.size = Pt(22)
+
+    subtitle = doc.add_paragraph()
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = subtitle.add_run(f'Generado el {datetime.now().strftime("%d/%m/%Y")}')
+    run.font.size = Pt(10)
+    run.font.color.rgb = RGBColor(100, 116, 139)
+
+    doc.add_paragraph()
+
+    total_existencia = sum(i.get('existencia', 0) or 0 for i in items)
+    total_comprometida = sum(i.get('cant_comprometida', 0) or 0 for i in items)
+    total_disponible = sum(i.get('cant_disponible', 0) or 0 for i in items)
+    total_valor = sum(i.get('valor_total', 0) or 0 for i in items)
+    refs_unicas = len(set(i.get('referencia', '') for i in items if i.get('referencia')))
+    total_registros = len(items)
+
+    doc.add_heading('Resumen General', level=1)
+    table = doc.add_table(rows=7, cols=2, style='Light Shading Accent 1')
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    metrics = [
+        ('Total Registros', f"{total_registros:,}"),
+        ('Referencias Unicas', f"{refs_unicas:,}"),
+        ('Existencia Total', f"{total_existencia:,.0f}"),
+        ('Cant. Comprometida', f"{total_comprometida:,.0f}"),
+        ('Cant. Disponible', f"{total_disponible:,.0f}"),
+        ('Valor Total', f"${total_valor:,.0f}"),
+        ('Compromiso (%)', f"{(total_comprometida / total_existencia * 100) if total_existencia > 0 else 0:.1f}%"),
+    ]
+    for i, (label, value) in enumerate(metrics):
+        table.rows[i].cells[0].text = label
+        table.rows[i].cells[1].text = value
+        for cell in table.rows[i].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(10)
+
+    bodegas_map = {}
+    for item in items:
+        b = item.get('desc_bodega') or item.get('bodega') or 'Sin bodega'
+        if b not in bodegas_map:
+            bodegas_map[b] = []
+        bodegas_map[b].append(item)
+
+    if bodegas_map:
+        doc.add_paragraph()
+        doc.add_heading('Inventario por Bodega', level=1)
+        for bodega_name, bodega_items in sorted(bodegas_map.items()):
+            doc.add_heading(bodega_name, level=2)
+            b_existencia = sum(i.get('existencia', 0) or 0 for i in bodega_items)
+            b_valor = sum(i.get('valor_total', 0) or 0 for i in bodega_items)
+            p = doc.add_paragraph()
+            p.add_run(f'Registros: {len(bodega_items)} | ')
+            p.add_run(f'Existencia: {b_existencia:,.0f} | ')
+            p.add_run(f'Valor: ${b_valor:,.0f}')
+
+            show_items = bodega_items[:20]
+            if show_items:
+                items_table = doc.add_table(rows=len(show_items) + 1, cols=5, style='Light List Accent 1')
+                header_row = items_table.rows[0]
+                for idx, h in enumerate(['Referencia', 'Descripcion', 'Existencia', 'Valor', 'Precio']):
+                    header_row.cells[idx].text = h
+                    for run in header_row.cells[idx].paragraphs[0].runs:
+                        run.bold = True
+                for j, item in enumerate(show_items):
+                    row = items_table.rows[j + 1]
+                    row.cells[0].text = str(item.get('referencia', ''))
+                    row.cells[1].text = str(item.get('desc_item', ''))[:40]
+                    row.cells[2].text = f"{(item.get('existencia', 0) or 0):,.0f}"
+                    row.cells[3].text = f"${(item.get('valor_total', 0) or 0):,.0f}"
+                    row.cells[4].text = f"${(item.get('precio_unitario', 0) or 0):,.0f}"
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            for run in paragraph.runs:
+                                run.font.size = Pt(9)
+            if len(bodega_items) > 20:
+                doc.add_paragraph(f'... y {len(bodega_items) - 20} registros mas en esta bodega.')
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+@app.post("/send-emails")
+async def send_emails(body: dict):
+    raw_df = current_data.get("raw_df")
+    if raw_df is None:
+        raise HTTPException(status_code=400, detail="No hay datos cargados.")
+
+    vendor_names = body.get("vendors", [])
+    if not vendor_names:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un asesor.")
+
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+    if not smtp_user or not smtp_pass:
+        raise HTTPException(status_code=500, detail="Credenciales SMTP no configuradas. Configura SMTP_USER y SMTP_PASS en .env")
+
+    sent = 0
+    errors = []
+
+    for vendor_name in vendor_names:
+        email = VENDOR_EMAILS.get(vendor_name.upper(), "")
+        if not email:
+            errors.append(f"{vendor_name}: email no encontrado en la lista de configuracion")
+            continue
+
+        items = get_vendor_items(raw_df, vendor_name)
+        if not items:
+            errors.append(f"{vendor_name}: no se encontraron registros con este nombre")
+            continue
+
+        doc_buffer = _generate_vendor_word_doc(vendor_name, items)
+
+        total_existencia = sum(i.get('existencia', 0) or 0 for i in items)
+        total_valor = sum(i.get('valor_total', 0) or 0 for i in items)
+        refs = len(set(i.get('referencia', '') for i in items if i.get('referencia')))
+
+        subject = f"Informe de Inventario - {vendor_name} - {datetime.now().strftime('%d/%m/%Y')}"
+        body_text = (
+            f"Hola {vendor_name},\n\n"
+            f"Adjunto encontras tu informe de inventario actualizado.\n\n"
+            f"Resumen:\n"
+            f"- Registros totales: {len(items):,}\n"
+            f"- Referencias unicas: {refs:,}\n"
+            f"- Existencia total: {total_existencia:,.0f}\n"
+            f"- Valor total: ${total_valor:,.0f}\n\n"
+            f"Saludos,\n"
+            f"Comercial - Interdoors"
+        )
+
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.mime.base import MIMEBase
+            from email import encoders
+
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body_text, 'plain'))
+
+            doc_buffer.seek(0)
+            part = MIMEBase('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document')
+            part.set_payload(doc_buffer.read())
+            encoders.encode_base64(part)
+            safe_name = vendor_name.replace(' ', '_')
+            part.add_header('Content-Disposition', f'attachment; filename="Informe_{safe_name}.docx"')
+            msg.attach(part)
+
+            with smtplib.SMTP('smtp.gmail.com', 587) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+
+            sent += 1
+        except Exception as e:
+            errors.append(f"{vendor_name}: {str(e)}")
+
+    return {"sent": sent, "errors": errors, "total": len(vendor_names)}
 
 
 if __name__ == "__main__":
