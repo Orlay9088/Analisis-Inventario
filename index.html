@@ -488,10 +488,12 @@
         .bodega-ms-panel .bm-actions .bm-clear { background: var(--bg-card); color: var(--text-secondary); }
         .bodega-ms-panel .bm-actions .bm-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
         .bodega-ms-list { overflow-y: auto; flex: 1; padding: 6px 0; }
-        .bodega-ms-list .bm-option { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; transition: background 0.12s; font-size: 0.8rem; color: var(--text-primary); }
+        .bodega-ms-list .bm-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; transition: background 0.12s; font-size: 0.8rem; color: var(--text-primary); }
         .bodega-ms-list .bm-option:hover { background: var(--bg-hover); }
         .bodega-ms-list .bm-option.selected { background: rgba(99,102,241,0.12); color: var(--accent-light); }
         .bodega-ms-list .bm-option input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+        .ms-item-code { font-weight: 700; color: var(--accent-light); font-size: 0.78rem; }
+        .ms-item-name { color: var(--text-primary); font-size: 0.78rem; }
         .bodega-ms-footer { padding: 8px 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .bodega-ms-footer .bm-count { font-size: 0.72rem; color: var(--text-muted); }
         .bodega-ms-footer .bm-apply { padding: 6px 14px; background: var(--accent-dark); color: white; border: none; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
@@ -520,7 +522,7 @@
         .ms-panel .ms-actions .ms-sel-all:hover { background: var(--accent); }
         .ms-panel .ms-actions .ms-clear { background: var(--bg-card); color: var(--text-secondary); }
         .ms-panel .ms-actions .ms-clear:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
-        .ms-panel .ms-list { overflow-y: auto; flex: 1; padding: 4px 0; max-height: 180px; }
+        .ms-panel .ms-list { overflow-y: auto; flex: 1; padding: 4px 0; max-height: 260px; }
         .ms-panel .ms-footer { padding: 6px 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .ms-panel .ms-footer .ms-count-text { font-size: 0.7rem; color: var(--text-muted); }
         .ms-panel .ms-footer .ms-apply { padding: 4px 12px; background: var(--accent-dark); color: white; border: none; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
@@ -1505,6 +1507,15 @@
             showToast('Datos limpiados', 'success');
         }
 
+        function smartSort(items) {
+            return items.sort((a, b) => {
+                const numA = parseFloat(a.replace(/^[A-Z]+0*/i, '')) || 0;
+                const numB = parseFloat(b.replace(/^[A-Z]+0*/i, '')) || 0;
+                if (numA !== numB) return numA - numB;
+                return a.localeCompare(b);
+            });
+        }
+
         function populateFilters() {
             if (!appData || !appData.global_summary) return;
             const gs = appData.global_summary;
@@ -1512,16 +1523,19 @@
             const defaults = { canal: 'Todos', categoria: 'Todas', estado: 'Todos', linea: 'Todas' };
             let hasFilters = false;
             for (const [key, data] of Object.entries(mapping)) {
-                const items = Object.keys(data || {}).sort();
+                const items = smartSort(Object.keys(data || {}));
                 if (items.length > 1) { hasFilters = true; }
                 const list = document.getElementById('ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'List');
                 const wrap = document.getElementById('ms' + key.charAt(0).toUpperCase() + key.slice(1) + 'Wrap');
                 if (wrap) wrap.style.display = items.length > 1 ? '' : 'none';
                 if (!list) continue;
                 list.innerHTML = items.map(item => {
+                    const parts = item.split(' - ');
+                    const code = parts[0] ? `<span class="ms-item-code">${escHtml(parts[0])}</span>` : '';
+                    const name = parts[1] ? ` <span class="ms-item-name">${escHtml(parts.slice(1).join(' - '))}</span>` : '';
                     return `<label class="bm-option" data-name="${escHtml(item)}">
                         <input type="checkbox" onchange="toggleMsItem('${key}', '${escHtml(item).replace(/'/g, "\\'")}')">
-                        <span>${escHtml(item)}</span>
+                        <span>${code}${name}</span>
                     </label>`;
                 }).join('');
                 activeFilters[key] = new Set();
