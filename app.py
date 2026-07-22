@@ -370,10 +370,13 @@ async def upload_excel(file: UploadFile = File(...)):
 
         import pandas as pd
         try:
-            raw_df = pd.read_excel(str(filepath), engine='openpyxl')
-            current_data["raw_df"] = raw_df
+            raw_df = pd.read_excel(str(filepath), engine='calamine')
         except Exception:
-            current_data["raw_df"] = None
+            try:
+                raw_df = pd.read_excel(str(filepath), engine='openpyxl')
+            except Exception:
+                raw_df = None
+        current_data["raw_df"] = raw_df
     except ValueError as e:
         filepath.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(e))

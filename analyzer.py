@@ -168,153 +168,199 @@ def compute_bodega_metrics(df: pd.DataFrame, col_map: dict[str, Optional[int]]) 
     bodega_col = "desc_bodega" if "desc_bodega" in df.columns else "bodega"
     df_valid = df.dropna(subset=[bodega_col]).copy()
 
-    for col in ["desc_bodega", "linea", "sub_linea", "categoria", "canal", "estado", "proveedor", "desc_co", "referencia"]:
-        if col in df_valid.columns:
-            df_valid[col] = df_valid[col].astype(str).str.strip()
-            df_valid[col] = df_valid[col].replace({"": None, "nan": None, "None": None})
+    str_cols = [c for c in ["desc_bodega", "linea", "sub_linea", "categoria", "canal", "estado", "proveedor", "desc_co", "referencia"] if c in df_valid.columns]
+    for col in str_cols:
+        df_valid[col] = df_valid[col].astype(str).str.strip()
+        df_valid[col] = df_valid[col].replace({"": None, "nan": None, "None": None})
+
+    num_cols = [c for c in ["existencia", "cant_comprometida", "cant_disponible", "valor_total", "costo_prom_total", "margen", "precio_unitario"] if c in df_valid.columns]
+    for col in num_cols:
+        df_valid[col] = pd.to_numeric(df_valid[col], errors="coerce").fillna(0)
+
+    sub_dims = {
+        "linea": ["existencia", "cant_comprometida", "cant_disponible", "valor_total", "margen"],
+        "categoria": ["existencia", "cant_comprometida", "valor_total", "margen"],
+        "canal": ["existencia", "cant_comprometida", "valor_total"],
+        "estado": ["existencia", "cant_comprometida", "valor_total"],
+        "proveedor": ["existencia", "cant_comprometida", "valor_total", "margen"],
+    }
+
+    sub_agg_results = {}
+    for dim_name, agg_cols in sub_dims.items():
+        if dim_name not in df_valid.columns:
+            continue
+        valid = df_valid.dropna(subset=[dim_name])
+        if valid.empty:
+            continue
+        agg_dict = {}
+        for c in agg_cols:
+            agg_dict[c] = "mean" if c == "margen" else "sum"
+        grouped = valid.groupby([bodega_col, dim_name], observed=False).agg(agg_dict).reset_index()
+        grouped["registros"] = valid.groupby([bodega_col, dim_name], observed=False).size().values
+        sub_agg_results[dim_name] = grouped
+
+    if "desc_item" in df_valid.columns:
+        valid_items = df_valid.dropna(subset=["desc_item"])
+        if not valid_items.empty:
+            items_grouped = valid_items.groupby([bodega_col, "desc_item"], observed=False).agg(
+                existencia=("existencia", "sum"),
+                comprometida=("cant_comprometida", "sum"),
+                valor=("valor_total", "sum"),
+                precio=("precio_unitario", "mean"),
+                registros=("desc_item", "count"),
+            ).reset_index()
+            top_items_per_bodega = items_grouped.sort_values("valor", ascending=False).groupby(bodega_col).head(10)
+            sub_agg_results["items"] = top_items_per_bodega
+
+    bodega_agg = df_valid.groupby(bodega_col, observed=False).agg(
+        existencia=("existencia", "sum"),
+        cant_comprometida=("cant_comprometida", "sum"),
+        cant_disponible=("cant_disponible", "sum"),
+        valor_total=("valor_total", "sum"),
+        costo_prom_total=("costo_prom_total", "sum"),
+        margen_promedio=("margen", "mean"),
+        precio_unitario=("precio_unitario", "mean"),
+        total_registros=(bodega_col, "count"),
+    ).reset_index()
+
+    if "referencia" in df_valid.columns:
+        ref_counts = df_valid.dropna(subset=["referencia"]).groupby(bodega_col, observed=False)["referencia"].nunique().reset_index()
+        ref_counts.columns = [bodega_col, "refs_unicas"]
+        bodega_agg = bodega_agg.merge(ref_counts, on=bodega_col, how="left")
+        bodega_agg["refs_unicas"] = bodega_agg["refs_unicas"].fillna(0).astype(int)
+    else:
+        bodega_agg["refs_unicas"] = 0
+
+    if "desc_item" in df_valid.columns:
+        item_counts = df_valid.dropna(subset=["desc_item"]).groupby(bodega_col, observed=False)["desc_item"].nunique().reset_index()
+        item_counts.columns = [bodega_col, "items_unicos"]
+        bodega_agg = bodega_agg.merge(item_counts, on=bodega_col, how="left")
+        bodega_agg["items_unicos"] = bodega_agg["items_unicos"].fillna(0).astype(int)
+    else:
+        bodega_agg["items_unicos"] = 0
+
+    if "fecha_ultima_salida" in df_valid.columns:
+        sin_mov = df_valid.groupby(bodega_col, observed=False)["fecha_ultima_salida"].apply(lambda x: x.isna().sum()).reset_index()
+        sin_mov.columns = [bodega_col, "sin_movimiento"]
+        bodega_agg = bodega_agg.merge(sin_mov, on=bodega_col, how="left")
+        bodega_agg["sin_movimiento"] = bodega_agg["sin_movimiento"].fillna(0).astype(int)
+    else:
+        bodega_agg["sin_movimiento"] = 0
+
+    if "bodega" in df_valid.columns and bodega_col != "bodega":
+        codigo_map = df_valid.dropna(subset=["bodega"]).groupby(bodega_col, observed=False)["bodega"].first().reset_index()
+        codigo_map.columns = [bodega_col, "bodega_codigo"]
+        bodega_agg = bodega_agg.merge(codigo_map, on=bodega_col, how="left")
+        bodega_agg["bodega_codigo"] = bodega_agg["bodega_codigo"].fillna("").astype(str)
+    else:
+        bodega_agg["bodega_codigo"] = bodega_agg[bodega_col]
 
     results = []
-    for bodega_name, group in df_valid.groupby(bodega_col):
-        bodega_name = str(bodega_name).strip()
+    for _, row in bodega_agg.iterrows():
+        bodega_name = str(row[bodega_col]).strip()
         if not bodega_name or bodega_name == "None":
             continue
-
-        bodega_codigo = ""
-        if bodega_col != "bodega" and "bodega" in group.columns:
-            raw_codes = group["bodega"].dropna().unique()
-            if len(raw_codes) > 0:
-                bodega_codigo = str(raw_codes[0]).strip()
-        elif bodega_col == "bodega":
-            bodega_codigo = bodega_name
-
-        existencia = _safe_sum(group, "existencia")
-        cant_comprometida = _safe_sum(group, "cant_comprometida")
-        cant_disponible = _safe_sum(group, "cant_disponible")
-        valor_total = _safe_sum(group, "valor_total")
-        costo_prom_total = _safe_sum(group, "costo_prom_total")
-        margen_promedio = _safe_mean(group, "margen")
-        precio_unitario = _safe_mean(group, "precio_unitario")
-        total_registros = len(group)
-
-        refs_unicas = 0
-        if "referencia" in group.columns:
-            refs_unicas = group["referencia"].dropna().nunique()
-
-        items_unicos = 0
-        if "desc_item" in group.columns:
-            items_unicos = group["desc_item"].dropna().nunique()
-
+        existencia = row["existencia"]
+        cant_comprometida = row["cant_comprometida"]
         compromiso_pct = (cant_comprometida / existencia * 100) if existencia > 0 else 0
 
         por_linea = {}
-        if "linea" in group.columns:
-            for linea, sub in group.dropna(subset=["linea"]).groupby("linea"):
-                linea_str = str(linea).strip()
-                if not linea_str or linea_str == "None":
-                    continue
-                por_linea[linea_str] = {
-                    "existencia": round(_safe_sum(sub, "existencia"), 0),
-                    "comprometida": round(_safe_sum(sub, "cant_comprometida"), 0),
-                    "disponible": round(_safe_sum(sub, "cant_disponible"), 0),
-                    "valor_total": round(_safe_sum(sub, "valor_total"), 0),
-                    "margen": round(_safe_mean(sub, "margen"), 1),
-                    "registros": len(sub),
-                }
+        if "linea" in sub_agg_results:
+            sub = sub_agg_results["linea"][sub_agg_results["linea"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                k = str(sr["linea"]).strip()
+                if k and k != "None":
+                    por_linea[k] = {
+                        "existencia": round(sr["existencia"], 0),
+                        "comprometida": round(sr["cant_comprometida"], 0),
+                        "disponible": round(sr.get("cant_disponible", sr["existencia"] - sr["cant_comprometida"]), 0),
+                        "valor_total": round(sr["valor_total"], 0),
+                        "margen": round(sr["margen"], 1),
+                        "registros": int(sr["registros"]),
+                    }
 
         por_categoria = {}
-        if "categoria" in group.columns:
-            for cat, sub in group.dropna(subset=["categoria"]).groupby("categoria"):
-                cat_str = str(cat).strip()
-                if not cat_str or cat_str == "None":
-                    continue
-                por_categoria[cat_str] = {
-                    "existencia": round(_safe_sum(sub, "existencia"), 0),
-                    "comprometida": round(_safe_sum(sub, "cant_comprometida"), 0),
-                    "valor_total": round(_safe_sum(sub, "valor_total"), 0),
-                    "margen": round(_safe_mean(sub, "margen"), 1),
-                    "registros": len(sub),
-                }
+        if "categoria" in sub_agg_results:
+            sub = sub_agg_results["categoria"][sub_agg_results["categoria"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                k = str(sr["categoria"]).strip()
+                if k and k != "None":
+                    por_categoria[k] = {
+                        "existencia": round(sr["existencia"], 0),
+                        "comprometida": round(sr["cant_comprometida"], 0),
+                        "valor_total": round(sr["valor_total"], 0),
+                        "margen": round(sr["margen"], 1),
+                        "registros": int(sr["registros"]),
+                    }
 
         por_canal = {}
-        if "canal" in group.columns:
-            for canal, sub in group.dropna(subset=["canal"]).groupby("canal"):
-                canal_str = str(canal).strip()
-                if not canal_str or canal_str == "None":
-                    continue
-                por_canal[canal_str] = {
-                    "existencia": round(_safe_sum(sub, "existencia"), 0),
-                    "comprometida": round(_safe_sum(sub, "cant_comprometida"), 0),
-                    "valor_total": round(_safe_sum(sub, "valor_total"), 0),
-                    "registros": len(sub),
-                }
+        if "canal" in sub_agg_results:
+            sub = sub_agg_results["canal"][sub_agg_results["canal"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                k = str(sr["canal"]).strip()
+                if k and k != "None":
+                    por_canal[k] = {
+                        "existencia": round(sr["existencia"], 0),
+                        "comprometida": round(sr["cant_comprometida"], 0),
+                        "valor_total": round(sr["valor_total"], 0),
+                        "registros": int(sr["registros"]),
+                    }
 
         por_estado = {}
-        if "estado" in group.columns:
-            for estado, sub in group.dropna(subset=["estado"]).groupby("estado"):
-                estado_str = str(estado).strip()
-                if not estado_str or estado_str == "None":
-                    continue
-                por_estado[estado_str] = {
-                    "existencia": round(_safe_sum(sub, "existencia"), 0),
-                    "comprometida": round(_safe_sum(sub, "cant_comprometida"), 0),
-                    "valor_total": round(_safe_sum(sub, "valor_total"), 0),
-                    "registros": len(sub),
-                }
+        if "estado" in sub_agg_results:
+            sub = sub_agg_results["estado"][sub_agg_results["estado"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                k = str(sr["estado"]).strip()
+                if k and k != "None":
+                    por_estado[k] = {
+                        "existencia": round(sr["existencia"], 0),
+                        "comprometida": round(sr["cant_comprometida"], 0),
+                        "valor_total": round(sr["valor_total"], 0),
+                        "registros": int(sr["registros"]),
+                    }
 
         por_proveedor = {}
-        if "proveedor" in group.columns:
-            for prov, sub in group.dropna(subset=["proveedor"]).groupby("proveedor"):
-                prov_str = str(prov).strip()
-                if not prov_str or prov_str == "None":
-                    continue
-                por_proveedor[prov_str] = {
-                    "existencia": round(_safe_sum(sub, "existencia"), 0),
-                    "comprometida": round(_safe_sum(sub, "cant_comprometida"), 0),
-                    "valor_total": round(_safe_sum(sub, "valor_total"), 0),
-                    "margen": round(_safe_mean(sub, "margen"), 1),
-                    "registros": len(sub),
-                }
+        if "proveedor" in sub_agg_results:
+            sub = sub_agg_results["proveedor"][sub_agg_results["proveedor"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                k = str(sr["proveedor"]).strip()
+                if k and k != "None":
+                    por_proveedor[k] = {
+                        "existencia": round(sr["existencia"], 0),
+                        "comprometida": round(sr["cant_comprometida"], 0),
+                        "valor_total": round(sr["valor_total"], 0),
+                        "margen": round(sr["margen"], 1),
+                        "registros": int(sr["registros"]),
+                    }
 
         top_items = []
-        if "desc_item" in group.columns:
-            items_df = group.dropna(subset=["desc_item"])
-            if not items_df.empty:
-                items_agg = items_df.groupby("desc_item").agg(
-                    existencia=("existencia", lambda x: _safe_sum_from_series(x)),
-                    comprometida=("cant_comprometida", lambda x: _safe_sum_from_series(x)),
-                    valor=("valor_total", lambda x: _safe_sum_from_series(x)),
-                    precio=("precio_unitario", lambda x: _safe_mean_from_series(x)),
-                    registros=("desc_item", "count"),
-                ).sort_values("valor", ascending=False).head(10)
-                for item_name, row_data in items_agg.iterrows():
-                    top_items.append({
-                        "item": str(item_name),
-                        "existencia": round(row_data["existencia"], 0),
-                        "comprometida": round(row_data["comprometida"], 0),
-                        "valor_total": round(row_data["valor"], 0),
-                        "precio_unitario": round(row_data["precio"], 0),
-                        "registros": int(row_data["registros"]),
-                    })
-
-        sin_movimiento = 0
-        if "fecha_ultima_salida" in group.columns:
-            sin_movimiento = group["fecha_ultima_salida"].isna().sum()
+        if "items" in sub_agg_results:
+            sub = sub_agg_results["items"][sub_agg_results["items"][bodega_col] == bodega_name]
+            for _, sr in sub.iterrows():
+                top_items.append({
+                    "item": str(sr["desc_item"]),
+                    "existencia": round(sr["existencia"], 0),
+                    "comprometida": round(sr["comprometida"], 0),
+                    "valor_total": round(sr["valor"], 0),
+                    "precio_unitario": round(sr["precio"], 0),
+                    "registros": int(sr["registros"]),
+                })
 
         results.append({
             "bodega": bodega_name,
-            "bodega_codigo": bodega_codigo,
+            "bodega_codigo": str(row["bodega_codigo"]),
             "existencia": round(existencia, 0),
             "cant_comprometida": round(cant_comprometida, 0),
-            "cant_disponible": round(cant_disponible, 0),
-            "valor_total": round(valor_total, 0),
-            "costo_prom_total": round(costo_prom_total, 0),
-            "margen_promedio": round(margen_promedio, 1),
-            "precio_unitario": round(precio_unitario, 0),
+            "cant_disponible": round(row["cant_disponible"], 0),
+            "valor_total": round(row["valor_total"], 0),
+            "costo_prom_total": round(row["costo_prom_total"], 0),
+            "margen_promedio": round(row["margen_promedio"], 1),
+            "precio_unitario": round(row["precio_unitario"], 0),
             "compromiso_pct": round(compromiso_pct, 1),
-            "total_registros": total_registros,
-            "refs_unicas": refs_unicas,
-            "items_unicos": items_unicos,
-            "sin_movimiento": int(sin_movimiento),
+            "total_registros": int(row["total_registros"]),
+            "refs_unicas": int(row["refs_unicas"]),
+            "items_unicos": int(row["items_unicos"]),
+            "sin_movimiento": int(row["sin_movimiento"]),
             "por_linea": por_linea,
             "por_categoria": por_categoria,
             "por_canal": por_canal,
@@ -576,9 +622,12 @@ Sé directo, profesional y basado en datos numericos especificos."""
 
 def process_excel(filepath: str, canal: str = None, categoria: str = None, estado: str = None, linea: str = None) -> dict:
     try:
-        xls = pd.ExcelFile(filepath, engine='openpyxl')
-    except Exception as e:
-        raise ValueError(f"No se pudo abrir el archivo Excel. Verifica que no este corrupto o abierto en otro programa: {e}")
+        xls = pd.ExcelFile(filepath, engine='calamine')
+    except Exception:
+        try:
+            xls = pd.ExcelFile(filepath, engine='openpyxl')
+        except Exception as e:
+            raise ValueError(f"No se pudo abrir el archivo Excel. Verifica que no este corrupto o abierto en otro programa: {e}")
 
     sheet_names = xls.sheet_names
     if not sheet_names:
@@ -591,7 +640,7 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
     sheet_dfs = {}
     for name in sheet_names:
         try:
-            df_check = pd.read_excel(filepath, sheet_name=name, header=None, engine='openpyxl')
+            df_check = pd.read_excel(xls, sheet_name=name, header=None)
             sheet_dfs[name] = df_check
             row_count = len(df_check)
             if row_count > max_rows:
@@ -606,26 +655,24 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
             break
 
     pivot_data = None
-    if pivot_sheet_name:
-        try:
-            df_pivot = pd.read_excel(filepath, sheet_name=pivot_sheet_name, header=None, engine='openpyxl')
-            pivot_data = _parse_pivot_from_df(df_pivot)
-        except Exception:
-            pivot_data = None
+    if pivot_sheet_name and pivot_sheet_name in sheet_dfs:
+        pivot_data = _parse_pivot_from_df(sheet_dfs[pivot_sheet_name])
 
     if not data_sheet_name:
         raise ValueError("No se encontro una hoja con datos. Verifica que el archivo tenga al menos una hoja con datos.")
 
-    headers = []
-    try:
-        df_raw = pd.read_excel(filepath, sheet_name=data_sheet_name, header=0, engine='openpyxl')
-        headers = list(df_raw.columns)
-        headers = [str(h) if h else '' for h in headers]
-    except Exception as e:
-        raise ValueError(f"Error al leer la hoja '{data_sheet_name}': {e}")
+    if data_sheet_name in sheet_dfs:
+        df_raw = sheet_dfs[data_sheet_name]
+        if df_raw.shape[0] > 0:
+            new_cols = [str(c).strip() if pd.notna(c) else '' for c in df_raw.iloc[0]]
+            df_raw = df_raw.iloc[1:].reset_index(drop=True)
+            df_raw.columns = new_cols
+    else:
+        df_raw = pd.read_excel(xls, sheet_name=data_sheet_name, header=0)
 
-    if not headers:
-        raise ValueError("La hoja de datos no tiene encabezados en la primera fila.")
+    headers = list(df_raw.columns)
+
+    del sheet_dfs
 
     col_map = detect_columns(headers)
 
