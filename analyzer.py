@@ -701,6 +701,15 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
     bodega_metrics = compute_bodega_metrics(df_filtered, col_map)
     global_summary = build_global_summary(bodega_metrics)
 
+    if pivot_data is None:
+        num_bodegas = len(bodega_metrics)
+        pivot_data = {
+            "title": "Resumen de Inventario",
+            "filter_value": f"{num_bodegas} bodega{'s' if num_bodegas != 1 else ''}",
+            "headers": ["Etiqueta", "Bodega", "Comprometida", "Existencia", "Disponible"],
+            "data": [["Resumen", "", 0, 0, 0]],
+        }
+
     return {
         "pivot_table": pivot_data,
         "col_map": {k: v for k, v in col_map.items() if v is not None},
