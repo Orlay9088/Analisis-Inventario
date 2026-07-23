@@ -701,7 +701,7 @@ def process_excel(filepath: str, canal: str = None, categoria: str = None, estad
     bodega_metrics = compute_bodega_metrics(df_filtered, col_map)
     global_summary = build_global_summary(bodega_metrics)
 
-    if pivot_data is None:
+    if not pivot_data or not pivot_data.get("data"):
         num_bodegas = len(bodega_metrics)
         pivot_data = {
             "title": "Resumen de Inventario",
